@@ -68,15 +68,15 @@ jobs:
 
 **DEFAULT / Polar TBD:** Polar products and organization IDs are **not wired yet**. The Action ships a license stub so workflows and secrets can land now; swap in real Polar validate when products exist. Until then, use `skip-license: true` for open testing or any ≥8-char placeholder key for packaging demos.
 
-## Pricing (placeholders)
+## Pricing
 
-| Tier | Price |
-|------|------:|
-| Single use | **$9** |
-| Monthly | **$12/mo** |
-| Lifetime | **$79** |
+| Tier | Price | Buy |
+|------|------:|-----|
+| Single use | **$9** | [Checkout](https://buy.polar.sh/polar_cl_BaJHHZ30SJeeOOtfQkxWy8WAu1Lft5j2cVwG20suSWa) |
+| Monthly | **$12/mo** | [Checkout](https://buy.polar.sh/polar_cl_nQHuiCYT1VVOCk4PWhU6KVUpcBkyEyb9Ssaay0YqiS9) |
+| Lifetime | **$79** | [Checkout](https://buy.polar.sh/polar_cl_WPvBpcyTzu1KrtUwh8IlcTjvNd0RZxEFkO48D1N6Eoy) |
 
-Checkout links TBD (Polar).
+Licensed via [Polar](https://polar.sh) (org `driftwatch-kit`). Store your key as `LINKFAIL_LICENSE_KEY`.
 
 ## Config reference
 
