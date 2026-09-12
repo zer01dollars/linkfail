@@ -17,9 +17,16 @@ jobs:
     permissions:
       contents: read
       issues: write
+      pull-requests: write
     steps:
       - uses: actions/checkout@v4
       - uses: zer01dollars/linkfail@v1
         with:
           polar-license-key: ${{ secrets.LINKFAIL_LICENSE_KEY }}
-          # mode: auto  (default — fail on PR, Issue on Monday cron)
+          # mode: auto  (default — fail on PR, Issue on Monday cron, PR comment on PRs)
+      - name: Upload Linkfail report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: linkfail-out
+          path: linkfail-out/

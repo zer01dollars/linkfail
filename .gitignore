@@ -6,3 +6,5 @@ node_modules/
 !.env.example
 coverage/
 .nyc_output/
+
+linkfail-out/

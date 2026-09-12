@@ -36,7 +36,7 @@ export function defaultConfig() {
     timeoutMs: 10000,
     concurrency: 8,
     checkHtml: false,
-    userAgent: 'Linkfail/0.1 (+https://github.com/zer01dollars/linkfail)',
+    userAgent: 'Linkfail/0.3 (+https://github.com/zer01dollars/linkfail)',
   };
 }
 

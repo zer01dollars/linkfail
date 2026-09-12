@@ -1,5 +1,5 @@
 name: 'Linkfail'
-description: 'Fail CI when Markdown docs links die. Optional weekly Issue digest. Made By Zer01.'
+description: 'Full-service docs link CI: fail PRs, PR comments, HTML/SARIF reports, weekly Issues, webhooks. Made By Zer01.'
 author: 'Zer01'
 branding:
   icon: 'link'
@@ -7,11 +7,14 @@ branding:
 
 inputs:
   github-token:
-    description: 'GitHub token (Issues API). Defaults to GITHUB_TOKEN.'
+    description: 'GitHub token (Issues + PR comments). Defaults to GITHUB_TOKEN.'
     required: false
     default: ${{ github.token }}
   polar-license-key:
     description: 'Polar license key (LINKFAIL / LINKFAIL-1X / LINKFAIL-LT)'
+    required: false
+  polar-organization-id:
+    description: 'Polar organization id (defaults to Zer01 / driftwatch-kit org)'
     required: false
   skip-license:
     description: 'Skip license check (try-before-buy / this repo CI)'
@@ -33,10 +36,25 @@ inputs:
     description: 'Override Issue digest. Leave empty with mode=auto.'
     required: false
     default: ''
+  comment-on-pr:
+    description: 'Upsert a PR comment with the report. Default true on pull_request events.'
+    required: false
+    default: ''
   issue-title:
     description: 'Title for the digest Issue'
     required: false
     default: 'Linkfail: broken links detected'
+  write-sarif:
+    description: 'Write linkfail-out/linkfail.sarif for Code Scanning'
+    required: false
+    default: 'true'
+  webhook-url:
+    description: 'Slack-compatible incoming webhook URL (or set LINKFAIL_WEBHOOK_URL)'
+    required: false
+  output-dir:
+    description: 'Directory for report.md / report.html / SARIF'
+    required: false
+    default: 'linkfail-out'
 
 outputs:
   broken-count:
@@ -47,6 +65,10 @@ outputs:
     description: 'Unique URLs checked'
   issue-url:
     description: 'Issue URL when a digest was written'
+  comment-url:
+    description: 'PR comment URL when upserted'
+  report-dir:
+    description: 'Output directory for reports'
 
 runs:
   using: 'node20'

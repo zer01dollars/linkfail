@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Linkfail — Broken docs links fail CI | Made By Zer01</title>
+  <meta name="description" content="Linkfail checks Markdown links in CI, fails PRs, posts comments, writes HTML/SARIF reports, and opens weekly Issues. Made By Zer01."/>
+  <style>
+    :root {
+      --bg: #070b12;
+      --card: #121a26;
+      --text: #eef2f8;
+      --muted: #94a3b8;
+      --red: #ef4444;
+      --red-glow: rgba(239, 68, 68, 0.35);
+      --border: #243044;
+      --ok: #22c55e;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      background: radial-gradient(1200px 600px at 50% -10%, #1a0a0a 0%, var(--bg) 55%);
+      color: var(--text);
+      line-height: 1.55;
+    }
+    a { color: #fca5a5; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .wrap { max-width: 980px; margin: 0 auto; padding: 2.5rem 1.25rem 4rem; }
+    .nav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 3rem; }
+    .logo { font-weight: 800; letter-spacing: -0.03em; font-size: 1.15rem; }
+    .logo span { color: var(--red); }
+    .pill {
+      font-size: .75rem; color: var(--muted); border: 1px solid var(--border);
+      padding: .35rem .7rem; border-radius: 999px;
+    }
+    .hero { text-align: center; margin-bottom: 3rem; }
+    .hero h1 {
+      font-size: clamp(2rem, 5vw, 3rem); line-height: 1.1; margin: 0 0 1rem;
+      letter-spacing: -0.04em;
+    }
+    .hero p { color: var(--muted); max-width: 560px; margin: 0 auto 1.75rem; font-size: 1.05rem; }
+    .cta { display: flex; flex-wrap: wrap; gap: .75rem; justify-content: center; }
+    .btn {
+      display: inline-block; padding: .7rem 1.15rem; border-radius: 10px;
+      font-weight: 600; font-size: .95rem; border: 1px solid transparent;
+    }
+    .btn-primary { background: var(--red); color: #fff; box-shadow: 0 0 24px var(--red-glow); }
+    .btn-primary:hover { text-decoration: none; filter: brightness(1.05); }
+    .btn-ghost { background: transparent; border-color: var(--border); color: var(--text); }
+    .btn-ghost:hover { text-decoration: none; border-color: #475569; }
+    section { margin: 3rem 0; }
+    h2 { font-size: 1.35rem; letter-spacing: -0.02em; margin: 0 0 1rem; }
+    .grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 1rem;
+    }
+    .card {
+      background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+      padding: 1.15rem 1.2rem;
+    }
+    .card h3 { margin: 0 0 .4rem; font-size: 1rem; }
+    .card p { margin: 0; color: var(--muted); font-size: .9rem; }
+    .icon { font-size: 1.25rem; margin-bottom: .5rem; }
+    .steps {
+      background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+      padding: 1.25rem 1.4rem; counter-reset: step;
+    }
+    .steps li {
+      list-style: none; position: relative; padding-left: 2.2rem; margin: .85rem 0;
+      color: var(--muted);
+    }
+    .steps li::before {
+      counter-increment: step; content: counter(step);
+      position: absolute; left: 0; top: 0;
+      width: 1.55rem; height: 1.55rem; border-radius: 8px;
+      background: #3f1212; color: #fecaca; font-size: .8rem; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .steps code, pre code {
+      background: #0b1220; padding: .1rem .35rem; border-radius: 4px; font-size: .85rem;
+      color: #e2e8f0;
+    }
+    .pricing .card { text-align: center; }
+    .pricing .price { font-size: 1.75rem; font-weight: 800; margin: .4rem 0; letter-spacing: -0.03em; }
+    .pricing .muted { color: var(--muted); font-size: .85rem; margin-bottom: 1rem; }
+    footer {
+      margin-top: 4rem; text-align: center; color: var(--muted); font-size: .85rem;
+      border-top: 1px solid var(--border); padding-top: 1.5rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="nav">
+      <div class="logo">Link<span>fail</span></div>
+      <div class="pill">Made By Zer01</div>
+    </div>
+
+    <header class="hero">
+      <h1>Broken docs links should fail CI — not your users.</h1>
+      <p>
+        Linkfail checks Markdown http(s) links in GitHub Actions: fail the PR, leave a comment,
+        ship an HTML + SARIF report, open a weekly Issue, and ping Slack.
+      </p>
+      <div class="cta">
+        <a class="btn btn-primary" href="https://github.com/zer01dollars/linkfail#60-second-setup">Get started in 60s</a>
+        <a class="btn btn-ghost" href="https://github.com/zer01dollars/linkfail">GitHub</a>
+      </div>
+    </header>
+
+    <section>
+      <h2>The problem</h2>
+      <div class="card">
+        <p>
+          Docs rot quietly. A renamed page, a dead blog post, a 404 badge — none of them fail your build
+          until a customer hits the link. Linkfail makes “links still work” a first-class CI check.
+        </p>
+      </div>
+    </section>
+
+    <section>
+      <h2>60-second setup</h2>
+      <ol class="steps">
+        <li>Buy a Polar license and add secret <code>LINKFAIL_LICENSE_KEY</code>.</li>
+        <li>Run <code>npx linkfail init</code> or copy <code>examples/linkfail.yml</code> into <code>.github/workflows/</code>.</li>
+        <li>Push — PRs fail + comment; Monday cron opens an Issue; reports land in <code>linkfail-out/</code>.</li>
+      </ol>
+    </section>
+
+    <section class="pricing">
+      <h2>Pricing</h2>
+      <div class="grid">
+        <div class="card">
+          <h3>Single use</h3>
+          <div class="price">$9</div>
+          <div class="muted">One validated run · LINKFAIL-1X</div>
+          <a class="btn btn-primary" href="https://buy.polar.sh/polar_cl_BaJHHZ30SJeeOOtfQkxWy8WAu1Lft5j2cVwG20suSWa">Buy</a>
+        </div>
+        <div class="card">
+          <h3>Monthly</h3>
+          <div class="price">$12<span style="font-size:.9rem;font-weight:600;color:var(--muted)">/mo</span></div>
+          <div class="muted">Ongoing CI · LINKFAIL</div>
+          <a class="btn btn-primary" href="https://buy.polar.sh/polar_cl_nQHuiCYT1VVOCk4PWhU6KVUpcBkyEyb9Ssaay0YqiS9">Buy</a>
+        </div>
+        <div class="card">
+          <h3>Lifetime</h3>
+          <div class="price">$79</div>
+          <div class="muted">Pay once · LINKFAIL-LT</div>
+          <a class="btn btn-primary" href="https://buy.polar.sh/polar_cl_WPvBpcyTzu1KrtUwh8IlcTjvNd0RZxEFkO48D1N6Eoy">Buy</a>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Features</h2>
+      <div class="grid">
+        <div class="card"><div class="icon">🚫</div><h3>CI gate</h3><p>Fail the job when any checked link is broken, timed out, or errored.</p></div>
+        <div class="card"><div class="icon">📅</div><h3>Weekly Issue</h3><p>Schedule or manual runs open/update a digest Issue with the full report.</p></div>
+        <div class="card"><div class="icon">💬</div><h3>PR comment</h3><p>Upsert a report comment on pull requests so reviewers see dead links instantly.</p></div>
+        <div class="card"><div class="icon">📊</div><h3>HTML report</h3><p>Self-contained dashboard in <code>linkfail-out/report.html</code> — upload as an artifact.</p></div>
+        <div class="card"><div class="icon">🔎</div><h3>SARIF</h3><p>Optional Code Scanning SARIF so broken links show in the GitHub UI.</p></div>
+        <div class="card"><div class="icon">🔔</div><h3>Webhook</h3><p>Slack-compatible incoming webhook — soft-fail if the hook is down.</p></div>
+      </div>
+    </section>
+
+    <footer>
+      <p>Made By Zer01 — Artificially Intelligent, Digitally Enhanced.</p>
+      <p><a href="https://github.com/zer01dollars/linkfail">github.com/zer01dollars/linkfail</a></p>
+    </footer>
+  </div>
+</body>
+</html>

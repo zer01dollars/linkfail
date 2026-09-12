@@ -39250,37 +39250,185 @@ var core = __nccwpck_require__(7484);
 var github = __nccwpck_require__(3228);
 ;// CONCATENATED MODULE: ./src/license.js
 /**
- * Polar license stub for Linkfail.
- * Full Polar product IDs TBD — see README DEFAULT note.
- * Accepts: skip=true / SKIP_LICENSE, or key length >= 8.
+ * Polar license validation against the customer-portal validate API.
+ * Skip via SKIP_LICENSE / skip-license for CI and local runs.
+ *
+ * Tiers (prefix / benefit_id):
+ *   LINKFAIL-1X  → single_use (+ increment_usage: 1)
+ *   LINKFAIL-LT  → lifetime
+ *   LINKFAIL     → monthly
  */
 
+/** Default Polar organization id (driftwatch-kit). */
+const DEFAULT_POLAR_ORG_ID = 'b6303f05-be1c-4b45-b847-5979667a3d12';
+
+/** Known Polar benefit ids for Linkfail. */
+const SINGLE_USE_BENEFIT_ID = '508650c0-9f6c-4a75-8af3-12e05569880e';
+const MONTHLY_BENEFIT_ID = '94f5b762-4875-432b-8fc4-3f7fa641ef57';
+const LIFETIME_BENEFIT_ID = 'cac8f272-3887-4f43-9a69-51cb7be9737c';
+
+const VALIDATE_URL =
+  'https://api.polar.sh/v1/customer-portal/license-keys/validate';
+
 /**
+ * Resolve Polar organization_id from input → env → config → default.
  * @param {object} [options]
+ * @param {string} [options.organizationId]
+ * @param {string} [options.configOrganizationId]
+ * @returns {string}
+ */
+function resolveOrganizationId({
+  organizationId,
+  configOrganizationId,
+} = {}) {
+  return (
+    (organizationId && String(organizationId).trim()) ||
+    (process.env.POLAR_ORGANIZATION_ID &&
+      String(process.env.POLAR_ORGANIZATION_ID).trim()) ||
+    (configOrganizationId && String(configOrganizationId).trim()) ||
+    DEFAULT_POLAR_ORG_ID
+  );
+}
+
+/**
+ * @param {string} [licenseKey]
+ * @param {string} [benefitId]
+ * @returns {'single_use'|'monthly'|'lifetime'|undefined}
+ */
+function detectTier(licenseKey = '', benefitId = '') {
+  const key = String(licenseKey || '').trim();
+  const bid = String(benefitId || '');
+
+  if (
+    key.startsWith('LINKFAIL-1X') ||
+    process.env.LINKFAIL_LICENSE_TIER === 'single' ||
+    bid === SINGLE_USE_BENEFIT_ID
+  ) {
+    return 'single_use';
+  }
+  if (
+    key.startsWith('LINKFAIL-LT') ||
+    process.env.LINKFAIL_LICENSE_TIER === 'lifetime' ||
+    bid === LIFETIME_BENEFIT_ID
+  ) {
+    return 'lifetime';
+  }
+  if (
+    key.startsWith('LINKFAIL') ||
+    process.env.LINKFAIL_LICENSE_TIER === 'monthly' ||
+    bid === MONTHLY_BENEFIT_ID
+  ) {
+    return 'monthly';
+  }
+  return undefined;
+}
+
+/**
+ * @param {object} options
  * @param {string} [options.licenseKey]
  * @param {boolean} [options.skip]
- * @returns {{ ok: boolean, reason: string }}
+ * @param {string} [options.organizationId]
+ * @param {string} [options.configOrganizationId]
+ * @param {typeof fetch} [options.fetchImpl]
+ * @returns {Promise<{ ok: boolean, reason: string, tier?: string, benefitId?: string }>}
  */
-function validateLicense({ licenseKey, skip = false } = {}) {
+async function validateLicense({
+  licenseKey,
+  skip = false,
+  organizationId,
+  configOrganizationId,
+  fetchImpl = globalThis.fetch,
+} = {}) {
   if (
     skip ||
     process.env.SKIP_LICENSE === '1' ||
     process.env.SKIP_LICENSE === 'true'
   ) {
-    return { ok: true, reason: 'skipped' };
+    return { ok: true, reason: 'skipped', tier: detectTier(licenseKey) };
   }
 
-  const key = String(licenseKey || '').trim();
-  if (!key) {
-    return { ok: false, reason: 'missing_license_key' };
+  if (!licenseKey || !String(licenseKey).trim()) {
+    return {
+      ok: false,
+      reason: 'missing_license_key',
+    };
   }
 
-  if (key.length < 8) {
+  const key = String(licenseKey).trim();
+  const orgId = resolveOrganizationId({
+    organizationId,
+    configOrganizationId,
+  });
+
+  const PLACEHOLDER = 'REPLACE_WITH_LINKFAIL_ORG_UUID';
+  if (!orgId || orgId === PLACEHOLDER) {
+    return {
+      ok: false,
+      reason: 'missing_organization_id',
+    };
+  }
+
+  const tierHint = detectTier(key);
+  /** @type {Record<string, unknown>} */
+  const body = {
+    key,
+    organization_id: orgId,
+  };
+  if (tierHint === 'single_use') {
+    body.increment_usage = 1;
+  }
+
+  let res;
+  try {
+    res = await fetchImpl(VALIDATE_URL, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        accept: 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    return { ok: false, reason: 'license_api_error' };
+  }
+
+  if (res.status === 404) {
     return { ok: false, reason: 'invalid_license_key' };
   }
 
-  // Stub: length gate only until Polar products are wired.
-  return { ok: true, reason: 'stub_accepted' };
+  if (!res.ok) {
+    if (res.status === 400 || res.status === 403 || res.status === 422) {
+      return { ok: false, reason: 'invalid_license_key' };
+    }
+    return { ok: false, reason: 'license_api_error' };
+  }
+
+  let data;
+  try {
+    data = await res.json();
+  } catch {
+    return { ok: false, reason: 'license_api_error' };
+  }
+
+  const status = String(data?.status || '').toLowerCase();
+  const valid =
+    status === 'granted' ||
+    data?.valid === true ||
+    (status && status !== 'revoked' && status !== 'disabled' && data?.id);
+
+  if (!valid || status === 'revoked' || status === 'disabled') {
+    return { ok: false, reason: 'invalid_license_key' };
+  }
+
+  const benefitId = data?.benefit_id || data?.benefitId || '';
+  const tier = detectTier(key, benefitId) || tierHint;
+
+  return {
+    ok: true,
+    reason: 'granted',
+    tier,
+    benefitId: benefitId || undefined,
+  };
 }
 
 ;// CONCATENATED MODULE: external "node:fs"
@@ -42394,7 +42542,7 @@ function defaultConfig() {
     timeoutMs: 10000,
     concurrency: 8,
     checkHtml: false,
-    userAgent: 'Linkfail/0.1 (+https://github.com/zer01dollars/linkfail)',
+    userAgent: 'Linkfail/0.3 (+https://github.com/zer01dollars/linkfail)',
   };
 }
 
@@ -42811,8 +42959,11 @@ async function scanRepo({
 
 ;// CONCATENATED MODULE: ./src/report.js
 /**
- * Format Linkfail scan reports (console + GitHub Issue body).
+ * Format Linkfail scan reports (console, Issue/PR body, HTML, SARIF).
  */
+
+
+
 
 /**
  * @param {object} scan
@@ -42848,6 +42999,7 @@ function formatIssueBody(scan, meta = {}) {
 
   lines.push('## Broken links');
   lines.push('');
+
   for (const r of scan.broken) {
     const files =
       scan.links?.find((l) => l.url === r.url)?.files?.join(', ') || '—';
@@ -42877,6 +43029,218 @@ function formatConsoleSummary(scan) {
     `ignored=${scan.ignoredCount ?? 0}`,
   ];
   return `Linkfail: ${parts.join(' ')}`;
+}
+
+/**
+ * Escape HTML text content / attributes.
+ * @param {string} s
+ * @returns {string}
+ */
+function esc(s) {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+/**
+ * Self-contained HTML dashboard.
+ * @param {object} scan
+ * @param {object} [meta]
+ * @returns {string}
+ */
+function formatHtmlReport(scan, meta = {}) {
+  const now = meta.generatedAt || new Date().toISOString();
+  const repo = meta.repo || '';
+  const broken = scan.broken || [];
+  const ok = scan.okCount ?? 0;
+  const urls = scan.results?.length ?? 0;
+  const files = scan.files?.length ?? 0;
+  const ignored = scan.ignoredCount ?? 0;
+
+  const rows = broken
+    .map((r) => {
+      const fileList =
+        scan.links?.find((l) => l.url === r.url)?.files?.join(', ') || '—';
+      const detail = r.httpStatus
+        ? `HTTP ${r.httpStatus}`
+        : r.detail || r.status;
+      return `<tr>
+        <td><span class="badge badge-${esc(r.status)}">${esc(r.status)}</span></td>
+        <td>${esc(detail)}</td>
+        <td><a href="${esc(r.url)}" rel="noopener noreferrer">${esc(r.url)}</a></td>
+        <td class="files">${esc(fileList)}</td>
+      </tr>`;
+    })
+    .join('\n');
+
+  const statusColor = broken.length ? '#dc2626' : '#16a34a';
+  const statusLabel = broken.length
+    ? `${broken.length} broken`
+    : 'All healthy';
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Linkfail report${repo ? ` — ${esc(repo)}` : ''}</title>
+<style>
+  :root { --bg:#0f1419; --card:#1a2332; --text:#e7ecf3; --muted:#8b9bb4; --accent:#ef4444; --ok:#22c55e; --border:#2a3548; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background: var(--bg); color: var(--text); line-height: 1.5; }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 2rem 1.25rem 3rem; }
+  header { margin-bottom: 1.75rem; }
+  h1 { margin: 0 0 .35rem; font-size: 1.75rem; letter-spacing: -0.02em; }
+  .sub { color: var(--muted); font-size: .9rem; }
+  .status { display:inline-block; margin-top:.75rem; padding:.35rem .75rem; border-radius:999px; background:${statusColor}22; color:${statusColor}; font-weight:600; font-size:.85rem; }
+  .grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: .75rem; margin: 1.5rem 0; }
+  .card { background: var(--card); border:1px solid var(--border); border-radius:12px; padding:1rem 1.1rem; }
+  .card .n { font-size:1.6rem; font-weight:700; letter-spacing:-0.03em; }
+  .card .l { color: var(--muted); font-size:.8rem; text-transform:uppercase; letter-spacing:.04em; }
+  table { width:100%; border-collapse: collapse; background: var(--card); border:1px solid var(--border); border-radius:12px; overflow:hidden; }
+  th, td { text-align:left; padding:.65rem .85rem; border-bottom:1px solid var(--border); font-size:.9rem; vertical-align:top; }
+  th { color: var(--muted); font-weight:600; font-size:.75rem; text-transform:uppercase; letter-spacing:.04em; background:#121a24; }
+  tr:last-child td { border-bottom:none; }
+  a { color:#93c5fd; word-break:break-all; }
+  .badge { display:inline-block; padding:.15rem .45rem; border-radius:6px; font-size:.75rem; font-weight:600; text-transform:uppercase; }
+  .badge-broken, .badge-error { background:#7f1d1d; color:#fecaca; }
+  .badge-timeout { background:#78350f; color:#fde68a; }
+  .files { color: var(--muted); font-size:.85rem; }
+  .empty { padding:1.5rem; text-align:center; color: var(--ok); background: var(--card); border:1px solid var(--border); border-radius:12px; }
+  footer { margin-top:2rem; color: var(--muted); font-size:.8rem; text-align:center; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>Linkfail</h1>
+      <div class="sub">Generated <code>${esc(now)}</code>${repo ? ` · <code>${esc(repo)}</code>` : ''}</div>
+      <div class="status">${esc(statusLabel)}</div>
+    </header>
+    <div class="grid">
+      <div class="card"><div class="n">${files}</div><div class="l">Files</div></div>
+      <div class="card"><div class="n">${urls}</div><div class="l">URLs</div></div>
+      <div class="card"><div class="n" style="color:var(--ok)">${ok}</div><div class="l">OK</div></div>
+      <div class="card"><div class="n" style="color:var(--accent)">${broken.length}</div><div class="l">Broken</div></div>
+      <div class="card"><div class="n">${ignored}</div><div class="l">Ignored</div></div>
+    </div>
+    ${
+      broken.length
+        ? `<table>
+      <thead><tr><th>Status</th><th>Detail</th><th>URL</th><th>Files</th></tr></thead>
+      <tbody>
+${rows}
+      </tbody>
+    </table>`
+        : `<div class="empty">All checked links look healthy.</div>`
+    }
+    <footer>Made By Zer01 — Artificially Intelligent, Digitally Enhanced</footer>
+  </div>
+</body>
+</html>
+`;
+}
+
+/**
+ * SARIF 2.1.0 for GitHub Code Scanning.
+ * @param {object} scan
+ * @param {object} [meta]
+ * @returns {object}
+ */
+function formatSarif(scan, meta = {}) {
+  const results = (scan.broken || []).map((r) => {
+    const files =
+      scan.links?.find((l) => l.url === r.url)?.files || [];
+    const file = files[0] || undefined;
+    const detail = r.httpStatus
+      ? `HTTP ${r.httpStatus}`
+      : r.detail || r.status;
+    /** @type {Record<string, unknown>} */
+    const result = {
+      ruleId: 'broken-link',
+      level: 'error',
+      message: {
+        text: `Broken link (${detail}): ${r.url}`,
+      },
+    };
+    if (file) {
+      result.locations = [
+        {
+          physicalLocation: {
+            artifactLocation: { uri: file },
+          },
+        },
+      ];
+    }
+    return result;
+  });
+
+  return {
+    $schema:
+      'https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json',
+    version: '2.1.0',
+    runs: [
+      {
+        tool: {
+          driver: {
+            name: 'Linkfail',
+            version: meta.version || '0.3.0',
+            informationUri: 'https://github.com/zer01dollars/linkfail',
+            rules: [
+              {
+                id: 'broken-link',
+                shortDescription: { text: 'Broken or unreachable http(s) link' },
+                helpUri: 'https://github.com/zer01dollars/linkfail',
+              },
+            ],
+          },
+        },
+        results,
+      },
+    ],
+  };
+}
+
+/**
+ * Write report.md, report.html, and optional SARIF under outputDir.
+ * @param {object} options
+ * @param {object} options.scan
+ * @param {string} [options.outputDir]
+ * @param {string} [options.cwd]
+ * @param {boolean} [options.writeSarif]
+ * @param {object} [options.meta]
+ * @returns {{ md: string, html: string, sarif?: string }}
+ */
+function writeReports({
+  scan,
+  outputDir = 'linkfail-out',
+  cwd = process.cwd(),
+  writeSarif = true,
+  meta = {},
+} = {}) {
+  const dir = (0,external_node_path_namespaceObject.resolve)(cwd, outputDir);
+  (0,external_node_fs_namespaceObject.mkdirSync)(dir, { recursive: true });
+
+  const mdPath = (0,external_node_path_namespaceObject.join)(dir, 'report.md');
+  const htmlPath = (0,external_node_path_namespaceObject.join)(dir, 'report.html');
+  const md = formatIssueBody(scan, meta);
+  const html = formatHtmlReport(scan, meta);
+  (0,external_node_fs_namespaceObject.writeFileSync)(mdPath, md + (md.endsWith('\n') ? '' : '\n'), 'utf8');
+  (0,external_node_fs_namespaceObject.writeFileSync)(htmlPath, html, 'utf8');
+
+  /** @type {{ md: string, html: string, sarif?: string }} */
+  const out = { md: mdPath, html: htmlPath };
+
+  if (writeSarif) {
+    const sarifPath = (0,external_node_path_namespaceObject.join)(dir, 'linkfail.sarif');
+    const sarif = formatSarif(scan, meta);
+    (0,external_node_fs_namespaceObject.writeFileSync)(sarifPath, JSON.stringify(sarif, null, 2) + '\n', 'utf8');
+    out.sarif = sarifPath;
+  }
+
+  return out;
 }
 
 ;// CONCATENATED MODULE: ./src/issue.js
@@ -42954,11 +43318,161 @@ async function openOrUpdateIssue({
   };
 }
 
+;// CONCATENATED MODULE: ./src/pr-comment.js
+/**
+ * Upsert a pull-request comment with the Linkfail report marker.
+ */
+
+const pr_comment_MARKER = '<!-- linkfail-report -->';
+
+/**
+ * @param {object} options
+ * @param {import('@actions/github').GitHub} options.octokit
+ * @param {string} options.owner
+ * @param {string} options.repo
+ * @param {number} options.issueNumber  PR number
+ * @param {string} options.body
+ * @returns {Promise<{ id: number, html_url?: string, created: boolean }|null>}
+ */
+async function upsertPrComment({
+  octokit,
+  owner,
+  repo,
+  issueNumber,
+  body,
+}) {
+  if (!issueNumber) return null;
+
+  const text = body.includes(pr_comment_MARKER) ? body : `${pr_comment_MARKER}\n${body}`;
+
+  let existing = null;
+  try {
+    const comments = await octokit.paginate(
+      octokit.rest.issues.listComments,
+      {
+        owner,
+        repo,
+        issue_number: issueNumber,
+        per_page: 100,
+      },
+    );
+    existing =
+      comments.find(
+        (c) => typeof c.body === 'string' && c.body.includes(pr_comment_MARKER),
+      ) || null;
+  } catch {
+    // fall through to create
+  }
+
+  if (existing) {
+    const updated = await octokit.rest.issues.updateComment({
+      owner,
+      repo,
+      comment_id: existing.id,
+      body: text,
+    });
+    return {
+      id: updated.data.id,
+      html_url: updated.data.html_url,
+      created: false,
+    };
+  }
+
+  const created = await octokit.rest.issues.createComment({
+    owner,
+    repo,
+    issue_number: issueNumber,
+    body: text,
+  });
+  return {
+    id: created.data.id,
+    html_url: created.data.html_url,
+    created: true,
+  };
+}
+
+
+
+;// CONCATENATED MODULE: ./src/webhook.js
+/**
+ * Soft-fail Slack-compatible incoming webhook notifier.
+ */
+
+/**
+ * Build a short text summary for Slack-style webhooks.
+ * @param {object} scan
+ * @param {object} [meta]
+ * @returns {string}
+ */
+function formatWebhookText(scan, meta = {}) {
+  const repo = meta.repo ? ` (${meta.repo})` : '';
+  const broken = scan.broken?.length ?? 0;
+  const ok = scan.okCount ?? 0;
+  if (broken === 0) {
+    return `Linkfail${repo}: all ${ok} link(s) healthy. Made By Zer01`;
+  }
+  const preview = (scan.broken || [])
+    .slice(0, 5)
+    .map((r) => `• ${r.url} [${r.status}${r.httpStatus ? ` ${r.httpStatus}` : ''}]`)
+    .join('\n');
+  const more =
+    broken > 5 ? `\n…and ${broken - 5} more` : '';
+  return `Linkfail${repo}: ${broken} broken / ${ok} ok\n${preview}${more}\nMade By Zer01`;
+}
+
+/**
+ * POST Slack-incoming-webhook compatible JSON. Never throws — fail soft.
+ * @param {object} options
+ * @param {string} options.webhookUrl
+ * @param {object} options.scan
+ * @param {object} [options.meta]
+ * @param {typeof fetch} [options.fetchImpl]
+ * @param {(m: string) => void} [options.info]
+ * @returns {Promise<{ ok: boolean, reason?: string }>}
+ */
+async function notifyWebhook({
+  webhookUrl,
+  scan,
+  meta = {},
+  fetchImpl = globalThis.fetch,
+  info = () => {},
+} = {}) {
+  const url = String(webhookUrl || '').trim();
+  if (!url) return { ok: false, reason: 'no_webhook' };
+
+  const text = formatWebhookText(scan, meta);
+  const payload = {
+    text,
+    broken: scan.broken?.length ?? 0,
+    ok: scan.okCount ?? 0,
+    url: meta.runUrl || meta.repoUrl || '',
+  };
+
+  try {
+    const res = await fetchImpl(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      info(`Webhook returned HTTP ${res.status}; continuing`);
+      return { ok: false, reason: `http_${res.status}` };
+    }
+    info('Webhook notified');
+    return { ok: true };
+  } catch (err) {
+    info(`Webhook failed (soft): ${err.message || err}`);
+    return { ok: false, reason: 'webhook_error' };
+  }
+}
+
 ;// CONCATENATED MODULE: ./src/index.js
 /**
  * Linkfail — GitHub Action entrypoint.
  * Made By Zer01 / Artificially Intelligent, Digitally Enhanced.
  */
+
+
 
 
 
@@ -42976,31 +43490,69 @@ function truthy(v, defaultValue = false) {
   return defaultValue;
 }
 
+/**
+ * First source file for a broken URL, if known.
+ * @param {object} scan
+ * @param {object} r
+ * @returns {string|undefined}
+ */
+function fileForBroken(scan, r) {
+  return scan.links?.find((l) => l.url === r.url)?.files?.[0];
+}
+
 async function run(deps = {}) {
   const getInput = deps.getInput || ((n, o) => core.getInput(n, o));
   const setFailed = deps.setFailed || ((m) => core.setFailed(m));
   const info = deps.info || ((m) => core.info(m));
   const setOutput = deps.setOutput || ((n, v) => core.setOutput(n, v));
+  const warning =
+    deps.warning ||
+    ((m, props) => {
+      try {
+        core.warning(m, props);
+      } catch {
+        info(m);
+      }
+    });
+  const notice =
+    deps.notice ||
+    ((m) => {
+      try {
+        core.notice(m);
+      } catch {
+        info(m);
+      }
+    });
   const cwd = deps.cwd || process.cwd();
   const fetchImpl = deps.fetchImpl || globalThis.fetch;
 
   const licenseKey = getInput('polar-license-key') || '';
   const skipLicense = truthy(getInput('skip-license'), false);
+  const organizationId =
+    getInput('polar-organization-id') ||
+    process.env.POLAR_ORGANIZATION_ID ||
+    '';
   const configPath = getInput('config-path') || 'linkfail.yml';
   const issueTitle =
     getInput('issue-title') || 'Linkfail: broken links detected';
   const token =
     getInput('github-token') || process.env.GITHUB_TOKEN || '';
+  const writeSarif = truthy(getInput('write-sarif'), true);
+  const webhookUrl =
+    getInput('webhook-url') ||
+    process.env.LINKFAIL_WEBHOOK_URL ||
+    '';
+  const outputDir = getInput('output-dir') || 'linkfail-out';
 
   // mode: auto | pr | schedule | report
-  // auto → fail on PR/push, open Issue on schedule/workflow_dispatch
   const modeRaw = (getInput('mode') || 'auto').trim().toLowerCase();
   const eventName =
     deps.eventName ||
     process.env.GITHUB_EVENT_NAME ||
     (deps.context || github.context)?.eventName ||
     '';
-  const isPrLike = eventName === 'pull_request' || eventName === 'pull_request_target';
+  const isPrLike =
+    eventName === 'pull_request' || eventName === 'pull_request_target';
   const isDigestEvent =
     eventName === 'schedule' || eventName === 'workflow_dispatch';
 
@@ -43017,10 +43569,11 @@ async function run(deps = {}) {
       openIn === '' || openIn == null
         ? isDigestEvent
         : truthy(openIn, false);
-    // If neither event hint: keep fail-on-broken true, open-issue false (local/Action default)
     if (!eventName) {
-      failOnBroken = failIn === '' || failIn == null ? true : truthy(failIn, true);
-      openIssue = openIn === '' || openIn == null ? false : truthy(openIn, false);
+      failOnBroken =
+        failIn === '' || failIn == null ? true : truthy(failIn, true);
+      openIssue =
+        openIn === '' || openIn == null ? false : truthy(openIn, false);
     }
   } else if (modeRaw === 'pr') {
     failOnBroken = truthy(getInput('fail-on-broken'), true);
@@ -43032,11 +43585,22 @@ async function run(deps = {}) {
     failOnBroken = truthy(getInput('fail-on-broken'), true);
     openIssue = truthy(getInput('open-issue'), false);
   }
-  info(`Mode: ${modeRaw} (event=${eventName || 'none'}) fail=${failOnBroken} issue=${openIssue}`);
 
-  const license = validateLicense({
+  const commentIn = getInput('comment-on-pr');
+  const commentOnPr =
+    commentIn === '' || commentIn == null
+      ? isPrLike
+      : truthy(commentIn, false);
+
+  info(
+    `Mode: ${modeRaw} (event=${eventName || 'none'}) fail=${failOnBroken} issue=${openIssue} pr-comment=${commentOnPr}`,
+  );
+
+  const license = await validateLicense({
     licenseKey,
     skip: skipLicense,
+    organizationId,
+    fetchImpl,
   });
   if (!license.ok) {
     setFailed(
@@ -43044,7 +43608,9 @@ async function run(deps = {}) {
     );
     return { ok: false, reason: license.reason };
   }
-  info(`License: ${license.reason}`);
+  info(
+    `License: ${license.reason}${license.tier ? ` (${license.tier})` : ''}`,
+  );
 
   const config = loadConfig(configPath, cwd);
   info(
@@ -43053,63 +43619,139 @@ async function run(deps = {}) {
 
   const scan = await scanRepo({ config, cwd, fetchImpl });
   info(formatConsoleSummary(scan));
-  const notice =
-    deps.notice ||
-    ((m) => {
-      try {
-        core.notice(m);
-      } catch {
-        info(m);
-      }
-    });
   notice(
     `Linkfail: ${scan.results.length} URLs · ${scan.okCount} ok · ${scan.broken.length} broken`,
   );
+
+  for (const r of scan.broken) {
+    const file = fileForBroken(scan, r);
+    const detail = r.httpStatus
+      ? `HTTP ${r.httpStatus}`
+      : r.detail || r.status;
+    const msg = `Broken link (${detail}): ${r.url}`;
+    warning(msg, file ? { file } : undefined);
+  }
+
+  const context = deps.context || github.context;
+  let repoLabel = '';
+  try {
+    if (context?.repo?.owner && context?.repo?.repo) {
+      repoLabel = `${context.repo.owner}/${context.repo.repo}`;
+    }
+  } catch {
+    repoLabel = process.env.GITHUB_REPOSITORY || '';
+  }
+  const meta = {
+    repo: repoLabel,
+    generatedAt: new Date().toISOString(),
+    version: '0.3.0',
+  };
+
+  let reportPaths;
+  try {
+    reportPaths = writeReports({
+      scan,
+      outputDir,
+      cwd,
+      writeSarif,
+      meta,
+    });
+    info(`Wrote ${reportPaths.md}`);
+    info(`Wrote ${reportPaths.html}`);
+    if (reportPaths.sarif) info(`Wrote ${reportPaths.sarif}`);
+    setOutput('report-dir', outputDir);
+  } catch (err) {
+    info(`Report write skipped: ${err.message || err}`);
+  }
 
   setOutput('broken-count', String(scan.broken.length));
   setOutput('ok-count', String(scan.okCount));
   setOutput('url-count', String(scan.results.length));
 
-  if (openIssue && token) {
-    const octokit =
-      deps.octokit || github.getOctokit(token);
-    const context = deps.context || github.context;
-    const body = formatIssueBody(scan, {
-      repo: `${context.repo.owner}/${context.repo.repo}`,
-      generatedAt: new Date().toISOString(),
-    });
-    try {
-      const issue = await openOrUpdateIssue({
-        octokit,
-        owner: context.repo.owner,
-        repo: context.repo.repo,
-        title: issueTitle,
-        body,
-      });
-      info(
-        `${issue.created ? 'Opened' : 'Updated'} issue #${issue.number}: ${issue.html_url}`,
-      );
-      setOutput('issue-url', issue.html_url);
-    } catch (err) {
-      info(`Issue open/update skipped: ${err.message || err}`);
+  if ((openIssue || commentOnPr) && token) {
+    const octokit = deps.octokit || github.getOctokit(token);
+    const body = formatIssueBody(scan, meta);
+
+    if (openIssue) {
+      try {
+        const issue = await openOrUpdateIssue({
+          octokit,
+          owner: context.repo.owner,
+          repo: context.repo.repo,
+          title: issueTitle,
+          body,
+        });
+        info(
+          `${issue.created ? 'Opened' : 'Updated'} issue #${issue.number}: ${issue.html_url}`,
+        );
+        setOutput('issue-url', issue.html_url);
+      } catch (err) {
+        info(`Issue open/update skipped: ${err.message || err}`);
+      }
     }
-  } else if (openIssue && !token) {
-    info('open-issue set but no github-token; skipping issue');
+
+    if (commentOnPr) {
+      const prNumber =
+        deps.prNumber ||
+        context.payload?.pull_request?.number ||
+        (isPrLike ? context.issue?.number : undefined);
+      if (prNumber) {
+        try {
+          const comment = await upsertPrComment({
+            octokit,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issueNumber: prNumber,
+            body,
+          });
+          if (comment) {
+            info(
+              `${comment.created ? 'Created' : 'Updated'} PR comment${comment.html_url ? `: ${comment.html_url}` : ''}`,
+            );
+            setOutput('comment-url', comment.html_url || '');
+          }
+        } catch (err) {
+          info(`PR comment skipped: ${err.message || err}`);
+        }
+      } else {
+        info('comment-on-pr set but no PR number; skipping');
+      }
+    }
+  } else if ((openIssue || commentOnPr) && !token) {
+    info('Issue/PR comment requested but no github-token; skipping');
+  }
+
+  if (webhookUrl) {
+    await notifyWebhook({
+      webhookUrl,
+      scan,
+      meta: {
+        ...meta,
+        repoUrl: repoLabel
+          ? `https://github.com/${repoLabel}`
+          : '',
+      },
+      fetchImpl,
+      info,
+    });
   }
 
   if (scan.broken.length && failOnBroken) {
     const preview = scan.broken
       .slice(0, 10)
-      .map((r) => `  - [${r.status}] ${r.url} ${r.detail || r.httpStatus || ''}`)
+      .map(
+        (r) =>
+          `  - [${r.status}] ${r.url} ${r.detail || r.httpStatus || ''}`,
+      )
       .join('\n');
     setFailed(
       `Linkfail found ${scan.broken.length} broken link(s):\n${preview}`,
     );
-    return { ok: false, scan };
+    return { ok: false, scan, reportPaths };
   }
 
   info('Linkfail completed successfully.');
-  return { ok: true, scan };
+  return { ok: true, scan, reportPaths };
 }
 
 const isMain =

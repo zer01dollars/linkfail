@@ -1,9 +1,12 @@
 {
   "name": "linkfail",
-  "version": "0.2.0",
-  "description": "GitHub Action that fails CI when docs links die — Made By Zer01",
+  "version": "0.3.0",
+  "description": "Full-service docs link CI — fail PRs, reports, Issues, webhooks. Made By Zer01",
   "type": "module",
   "main": "dist/index.js",
+  "bin": {
+    "linkfail": "./bin/linkfail.js"
+  },
   "engines": {
     "node": ">=20"
   },
@@ -18,7 +21,8 @@
     "broken-links",
     "markdown",
     "linkfail",
-    "zer01"
+    "zer01",
+    "cli"
   ],
   "author": "Zer01",
   "license": "Apache-2.0",
@@ -38,5 +42,18 @@
   "bugs": {
     "url": "https://github.com/zer01dollars/linkfail/issues"
   },
-  "homepage": "https://github.com/zer01dollars/linkfail#readme"
+  "homepage": "https://github.com/zer01dollars/linkfail#readme",
+  "files": [
+    "action.yml",
+    "bin/",
+    "dist/",
+    "examples/",
+    "scripts/",
+    "src/",
+    "templates/",
+    "docs/site/",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ]
 }
