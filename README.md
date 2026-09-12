@@ -1,10 +1,12 @@
 # Linkfail
 
+<p align="center">
+  <img src="brand/logo.png" alt="Linkfail — LINK green, fail red" width="420"/>
+</p>
+
+<p align="center"><strong>Broken docs links should fail CI — not surprise your users.</strong></p>
+
 [![Linkfail](https://img.shields.io/badge/links-Linkfail-red)](https://github.com/zer01dollars/linkfail)
-
-**Broken docs links should fail CI — not surprise your users.**
-
-Linkfail is a full-service GitHub Action + CLI: check `http(s)` links in Markdown, **fail the PR**, leave a **PR comment**, write an **HTML + SARIF report**, open a **weekly Issue**, and optionally ping **Slack**.
 
 Made By Zer01  
 Artificially Intelligent, Digitally Enhanced.
