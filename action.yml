@@ -1,5 +1,5 @@
 name: 'Linkfail'
-description: 'Fail CI when Markdown/HTML docs links die. Made By Zer01.'
+description: 'Fail CI when Markdown docs links die. Optional weekly Issue digest. Made By Zer01.'
 author: 'Zer01'
 branding:
   icon: 'link'
@@ -7,28 +7,32 @@ branding:
 
 inputs:
   github-token:
-    description: 'GitHub token for opening/updating issues'
+    description: 'GitHub token (Issues API). Defaults to GITHUB_TOKEN.'
     required: false
     default: ${{ github.token }}
   polar-license-key:
-    description: 'Polar license key for Linkfail (stub: length >= 8 until products wired)'
+    description: 'Polar license key (LINKFAIL / LINKFAIL-1X / LINKFAIL-LT)'
     required: false
   skip-license:
-    description: 'Skip Polar license check (dev/CI only)'
+    description: 'Skip license check (try-before-buy / this repo CI)'
     required: false
     default: 'false'
+  mode:
+    description: 'auto (recommended) | pr | schedule. auto fails on PR/push and opens an Issue on schedule.'
+    required: false
+    default: 'auto'
   config-path:
-    description: 'Path to linkfail.yml config'
+    description: 'Optional linkfail.yml path. Omit the file to use built-in defaults.'
     required: false
     default: 'linkfail.yml'
   fail-on-broken:
-    description: 'Fail the job when broken links are found (default true)'
+    description: 'Override fail behavior. Leave empty with mode=auto.'
     required: false
-    default: 'true'
+    default: ''
   open-issue:
-    description: 'Open or update a GitHub Issue with the report (default false; use on schedule)'
+    description: 'Override Issue digest. Leave empty with mode=auto.'
     required: false
-    default: 'false'
+    default: ''
   issue-title:
     description: 'Title for the digest Issue'
     required: false
@@ -36,13 +40,13 @@ inputs:
 
 outputs:
   broken-count:
-    description: 'Number of broken/timeout/error URLs'
+    description: 'Broken / timeout / error URL count'
   ok-count:
-    description: 'Number of healthy URLs'
+    description: 'Healthy URL count'
   url-count:
     description: 'Unique URLs checked'
   issue-url:
-    description: 'URL of opened/updated Issue when open-issue is true'
+    description: 'Issue URL when a digest was written'
 
 runs:
   using: 'node20'

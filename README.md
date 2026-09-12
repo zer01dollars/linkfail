@@ -1,42 +1,32 @@
 # Linkfail
 
-**Docs links die. CI should notice.**
+**Broken docs links should fail CI — not surprise your users.**
 
-Teams pay Screaming Frog and site-audit SaaS to catch rotting URLs. [lychee](https://github.com/lycheeverse/lychee) is excellent free OSS — Linkfail packages the same painkiller as a **Polar-licensed GitHub Action** with PR fail gates and a weekly Issue digest.
+Linkfail is a tiny GitHub Action: it checks `http(s)` links in your Markdown, fails the pull request when something is dead, and can open a weekly GitHub Issue with the full report.
 
-**Made By Zer01** — Artificially Intelligent, Digitally Enhanced.
+Made By Zer01  
+Artificially Intelligent, Digitally Enhanced.
 
-> Never POINTY.
+---
 
-## What it does
+## 60-second setup
 
-| Mode | Behavior |
-|------|----------|
-| **Pull request** | Scan `**/*.md` (optional HTML). Fail the job if links are broken (configurable). |
-| **Schedule** | Same scan; open or update a GitHub Issue with a report. |
+**1. Buy a license** and add the key as a repo secret named `LINKFAIL_LICENSE_KEY`.
 
-Checks use HTTP `HEAD` (falls back to `GET`), with timeouts, exclude globs, and ignore-URL patterns from `linkfail.yml`.
+| | Price | |
+|--|------:|--|
+| Try one run | [$9](https://buy.polar.sh/polar_cl_BaJHHZ30SJeeOOtfQkxWy8WAu1Lft5j2cVwG20suSWa) | |
+| Monthly | [$12/mo](https://buy.polar.sh/polar_cl_nQHuiCYT1VVOCk4PWhU6KVUpcBkyEyb9Ssaay0YqiS9) | |
+| Lifetime | [$79](https://buy.polar.sh/polar_cl_WPvBpcyTzu1KrtUwh8IlcTjvNd0RZxEFkO48D1N6Eoy) | |
 
-**Non-goals:** full site crawler, JS-rendered SPA spider, Cursor rules.
-
-## Quick Start
-
-### 1. Config (optional)
-
-```bash
-cp templates/linkfail.example.yml linkfail.yml
-```
-
-### 2. Workflow — PR gate + weekly digest
+**2. Add one workflow** — copy [`examples/linkfail.yml`](examples/linkfail.yml) to `.github/workflows/linkfail.yml`:
 
 ```yaml
-# .github/workflows/linkfail.yml
 name: Linkfail
-
 on:
   pull_request:
   schedule:
-    - cron: '0 9 * * 1'  # Mondays 09:00 UTC
+    - cron: '0 9 * * 1'   # weekly digest
   workflow_dispatch:
 
 jobs:
@@ -45,88 +35,85 @@ jobs:
     permissions:
       contents: read
       issues: write
-      pull-requests: read
     steps:
       - uses: actions/checkout@v4
-      - name: Linkfail
-        uses: zer01dollars/linkfail@v0
+      - uses: zer01dollars/linkfail@v1
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
           polar-license-key: ${{ secrets.LINKFAIL_LICENSE_KEY }}
-          # skip-license: true   # local/dev only
-          fail-on-broken: ${{ github.event_name == 'pull_request' }}
-          open-issue: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
-          issue-title: 'Linkfail: broken links detected'
 ```
 
-### 3. License
+**3. Push.** On PRs, broken links fail the check. On the Monday cron (or “Run workflow”), Linkfail opens or updates an Issue titled `Linkfail: broken links detected`.
 
-| Input | Behavior |
-|-------|----------|
-| `skip-license: true` or `SKIP_LICENSE=1` | Skip check (CI of this repo / local) |
-| `polar-license-key` | Stub accepts keys with **length ≥ 8** |
+No `linkfail.yml` required. Built-in defaults scan `**/*.md` and ignore localhost + common badge hosts.
 
-**DEFAULT / Polar TBD:** Polar products and organization IDs are **not wired yet**. The Action ships a license stub so workflows and secrets can land now; swap in real Polar validate when products exist. Until then, use `skip-license: true` for open testing or any ≥8-char placeholder key for packaging demos.
+Or from a clone of this repo:
 
-## Pricing
+```bash
+./scripts/install.sh /path/to/your-repo
+```
 
-| Tier | Price | Buy |
-|------|------:|-----|
-| Single use | **$9** | [Checkout](https://buy.polar.sh/polar_cl_BaJHHZ30SJeeOOtfQkxWy8WAu1Lft5j2cVwG20suSWa) |
-| Monthly | **$12/mo** | [Checkout](https://buy.polar.sh/polar_cl_nQHuiCYT1VVOCk4PWhU6KVUpcBkyEyb9Ssaay0YqiS9) |
-| Lifetime | **$79** | [Checkout](https://buy.polar.sh/polar_cl_WPvBpcyTzu1KrtUwh8IlcTjvNd0RZxEFkO48D1N6Eoy) |
+---
 
-Licensed via [Polar](https://polar.sh) (org `driftwatch-kit`). Store your key as `LINKFAIL_LICENSE_KEY`.
+## What you get
 
-## Config reference
+| When | What happens |
+|------|----------------|
+| **Pull request** | Scan Markdown → **fail the job** if any link is broken |
+| **Schedule / manual run** | Same scan → **open or update a GitHub Issue** with the report |
 
-See [`templates/linkfail.example.yml`](templates/linkfail.example.yml).
+Under the hood: HTTP `HEAD` (falls back to `GET`), timeouts, parallel checks.
 
-| Key | Default | Notes |
-|-----|---------|-------|
-| `include` | `**/*.md` | fast-glob patterns |
-| `exclude` | `node_modules`, `.git`, `dist`, … | |
-| `ignoreUrls` | `[]` | substring, `*` glob, or `/regex/` |
-| `timeoutMs` | `10000` | per request |
-| `concurrency` | `8` | parallel checks |
-| `checkHtml` | `false` | also scan `*.html` / `*.htm` |
+**Not included:** full-site crawling, JS-rendered SPA spidering, Cursor rules.
+
+---
+
+## Optional config
+
+Only if you need it — create `linkfail.yml` at the repo root (see [`templates/linkfail.example.yml`](templates/linkfail.example.yml)):
+
+```yaml
+include:
+  - "**/*.md"
+exclude:
+  - "**/CHANGELOG.md"
+ignoreUrls:
+  - "https://twitter.com/"   # added on top of built-in ignores
+timeoutMs: 10000
+concurrency: 8
+checkHtml: false             # set true to also scan HTML
+```
+
+---
 
 ## Action inputs
 
-| Input | Default | Description |
-|-------|---------|-------------|
-| `github-token` | `${{ github.token }}` | Issues API |
-| `polar-license-key` | — | Polar key (stub) |
-| `skip-license` | `false` | Skip license |
-| `config-path` | `linkfail.yml` | Config path |
-| `fail-on-broken` | `true` | Fail job on broken links |
-| `open-issue` | `false` | Open/update digest Issue |
-| `issue-title` | `Linkfail: broken links detected` | Issue title |
+| Input | Default | Meaning |
+|-------|---------|---------|
+| `polar-license-key` | — | Your Polar key |
+| `mode` | `auto` | `auto` = fail on PR/push, Issue on schedule; or force `pr` / `schedule` |
+| `fail-on-broken` | *(auto)* | Set only to override `mode` |
+| `open-issue` | *(auto)* | Set only to override `mode` |
+| `config-path` | `linkfail.yml` | Config file (optional) |
+| `skip-license` | `false` | Try without a key (dev) |
+| `github-token` | `GITHUB_TOKEN` | Needed for Issue digest |
+| `issue-title` | `Linkfail: broken links detected` | Digest title |
 
-## Local proof (offline)
+Outputs: `broken-count`, `ok-count`, `url-count`, `issue-url`.
+
+---
+
+## Try locally (no network)
 
 ```bash
+git clone https://github.com/zer01dollars/linkfail
+cd linkfail
 npm install
 npm test
-npm run local   # scans test/fixtures with mocked fetch — no network
+npm run local    # fixtures → expect 2 broken links
 ```
 
-Or:
+---
 
-```bash
-SKIP_LICENSE=1 node scripts/local-run.js
-```
+## License
 
-## Develop
-
-```bash
-npm install
-npm test
-npm run build   # ncc → dist/
-```
-
-Requires **Node 20+**. Apache-2.0.
-
-## Brand
-
-Made By Zer01 / Artificially Intelligent, Digitally Enhanced. Never POINTY.
+Apache-2.0. Product license keys via [Polar](https://polar.sh) (org `driftwatch-kit`).

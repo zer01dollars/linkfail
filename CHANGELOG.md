@@ -1,3 +1,11 @@
+
+## 0.2.0
+
+- Clearer README and 60-second setup
+- `mode: auto` (fail on PR, Issue on schedule)
+- Built-in ignore for localhost + badge hosts
+- `examples/linkfail.yml` + `scripts/install.sh`
+- Job notice summary
 # Changelog
 
 All notable changes to this project will be documented in this file.

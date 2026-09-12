@@ -30,12 +30,52 @@ export async function run(deps = {}) {
   const licenseKey = getInput('polar-license-key') || '';
   const skipLicense = truthy(getInput('skip-license'), false);
   const configPath = getInput('config-path') || 'linkfail.yml';
-  const failOnBroken = truthy(getInput('fail-on-broken'), true);
-  const openIssue = truthy(getInput('open-issue'), false);
   const issueTitle =
     getInput('issue-title') || 'Linkfail: broken links detected';
   const token =
     getInput('github-token') || process.env.GITHUB_TOKEN || '';
+
+  // mode: auto | pr | schedule | report
+  // auto → fail on PR/push, open Issue on schedule/workflow_dispatch
+  const modeRaw = (getInput('mode') || 'auto').trim().toLowerCase();
+  const eventName =
+    deps.eventName ||
+    process.env.GITHUB_EVENT_NAME ||
+    (deps.context || github.context)?.eventName ||
+    '';
+  const isPrLike = eventName === 'pull_request' || eventName === 'pull_request_target';
+  const isDigestEvent =
+    eventName === 'schedule' || eventName === 'workflow_dispatch';
+
+  let failOnBroken;
+  let openIssue;
+  if (modeRaw === 'auto') {
+    const failIn = getInput('fail-on-broken');
+    const openIn = getInput('open-issue');
+    failOnBroken =
+      failIn === '' || failIn == null
+        ? isPrLike || eventName === 'push' || eventName === ''
+        : truthy(failIn, true);
+    openIssue =
+      openIn === '' || openIn == null
+        ? isDigestEvent
+        : truthy(openIn, false);
+    // If neither event hint: keep fail-on-broken true, open-issue false (local/Action default)
+    if (!eventName) {
+      failOnBroken = failIn === '' || failIn == null ? true : truthy(failIn, true);
+      openIssue = openIn === '' || openIn == null ? false : truthy(openIn, false);
+    }
+  } else if (modeRaw === 'pr') {
+    failOnBroken = truthy(getInput('fail-on-broken'), true);
+    openIssue = truthy(getInput('open-issue'), false);
+  } else if (modeRaw === 'schedule' || modeRaw === 'report') {
+    failOnBroken = truthy(getInput('fail-on-broken'), false);
+    openIssue = truthy(getInput('open-issue'), true);
+  } else {
+    failOnBroken = truthy(getInput('fail-on-broken'), true);
+    openIssue = truthy(getInput('open-issue'), false);
+  }
+  info(`Mode: ${modeRaw} (event=${eventName || 'none'}) fail=${failOnBroken} issue=${openIssue}`);
 
   const license = validateLicense({
     licenseKey,
@@ -56,6 +96,18 @@ export async function run(deps = {}) {
 
   const scan = await scanRepo({ config, cwd, fetchImpl });
   info(formatConsoleSummary(scan));
+  const notice =
+    deps.notice ||
+    ((m) => {
+      try {
+        core.notice(m);
+      } catch {
+        info(m);
+      }
+    });
+  notice(
+    `Linkfail: ${scan.results.length} URLs · ${scan.okCount} ok · ${scan.broken.length} broken`,
+  );
 
   setOutput('broken-count', String(scan.broken.length));
   setOutput('ok-count', String(scan.okCount));

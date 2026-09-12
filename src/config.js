@@ -26,7 +26,13 @@ export function defaultConfig() {
       '**/dist/**',
       '**/coverage/**',
     ],
-    ignoreUrls: [],
+    ignoreUrls: [
+      'localhost',
+      '127.0.0.1',
+      'https://img.shields.io/',
+      'https://camo.githubusercontent.com/',
+      'badge.fury.io',
+    ],
     timeoutMs: 10000,
     concurrency: 8,
     checkHtml: false,
@@ -59,10 +65,17 @@ export function loadConfig(configPath = 'linkfail.yml', cwd = process.cwd()) {
 
   const include = normalizeStringList(raw.include, base.include);
   const exclude = normalizeStringList(raw.exclude, base.exclude);
-  const ignoreUrls = normalizeStringList(
+  const fileIgnores = normalizeStringList(
     raw.ignoreUrls ?? raw.ignore_urls ?? raw['ignore-urls'],
-    base.ignoreUrls,
+    [],
   );
+  // Keep built-in ignores unless user sets ignoreUrlsDefaults: false
+  const keepDefaults = raw.ignoreUrlsDefaults !== false && raw.ignore_urls_defaults !== false;
+  const ignoreUrls = keepDefaults
+    ? [...new Set([...base.ignoreUrls, ...fileIgnores])]
+    : fileIgnores.length
+      ? fileIgnores
+      : [...base.ignoreUrls];
 
   let timeoutMs = Number(raw.timeoutMs ?? raw.timeout_ms ?? raw.timeout ?? base.timeoutMs);
   if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) timeoutMs = base.timeoutMs;

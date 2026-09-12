@@ -1,32 +1,20 @@
-# Linkfail config — copy to linkfail.yml at repo root
-# Made By Zer01
+# Optional. Delete this file to use built-in defaults (scan **/*.md,
+# ignore localhost + shields.io badges).
+#
+# cp templates/linkfail.example.yml linkfail.yml
 
-# Globs of files to scan (default: all Markdown)
 include:
   - "**/*.md"
-  # - "**/*.{html,htm}"   # or set checkHtml: true
 
-# Paths to skip
 exclude:
   - "**/node_modules/**"
   - "**/dist/**"
-  - "**/.git/**"
   - "**/CHANGELOG.md"
 
-# URL patterns to ignore (substring, glob with *, or /regex/)
+# Extra ignores (built-ins already skip localhost + shields)
 ignoreUrls:
-  - "https://localhost"
-  - "https://example.com/*"
-  - "/^https:\\/\\/img\\.shields\\.io\\//"
+  - "https://twitter.com/"
 
-# Per-request timeout in milliseconds
 timeoutMs: 10000
-
-# Parallel URL checks
 concurrency: 8
-
-# Also scan HTML files (adds **/*.{html,htm} to include)
 checkHtml: false
-
-# Optional User-Agent override
-# userAgent: "Linkfail/0.1 (+https://github.com/zer01dollars/linkfail)"

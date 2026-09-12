@@ -1,0 +1,25 @@
+# Copy to .github/workflows/linkfail.yml
+# 1. Buy a key → repo Secret LINKFAIL_LICENSE_KEY
+# 2. Commit this file
+# That's it. No linkfail.yml required.
+
+name: Linkfail
+
+on:
+  pull_request:
+  schedule:
+    - cron: '0 9 * * 1'
+  workflow_dispatch:
+
+jobs:
+  links:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: zer01dollars/linkfail@v1
+        with:
+          polar-license-key: ${{ secrets.LINKFAIL_LICENSE_KEY }}
+          # mode: auto  (default — fail on PR, Issue on Monday cron)

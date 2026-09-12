@@ -1,6 +1,6 @@
 {
   "name": "linkfail",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "GitHub Action that fails CI when docs links die — Made By Zer01",
   "type": "module",
   "main": "dist/index.js",

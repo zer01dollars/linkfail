@@ -42384,7 +42384,13 @@ function defaultConfig() {
       '**/dist/**',
       '**/coverage/**',
     ],
-    ignoreUrls: [],
+    ignoreUrls: [
+      'localhost',
+      '127.0.0.1',
+      'https://img.shields.io/',
+      'https://camo.githubusercontent.com/',
+      'badge.fury.io',
+    ],
     timeoutMs: 10000,
     concurrency: 8,
     checkHtml: false,
@@ -42417,10 +42423,17 @@ function loadConfig(configPath = 'linkfail.yml', cwd = process.cwd()) {
 
   const include = normalizeStringList(raw.include, base.include);
   const exclude = normalizeStringList(raw.exclude, base.exclude);
-  const ignoreUrls = normalizeStringList(
+  const fileIgnores = normalizeStringList(
     raw.ignoreUrls ?? raw.ignore_urls ?? raw['ignore-urls'],
-    base.ignoreUrls,
+    [],
   );
+  // Keep built-in ignores unless user sets ignoreUrlsDefaults: false
+  const keepDefaults = raw.ignoreUrlsDefaults !== false && raw.ignore_urls_defaults !== false;
+  const ignoreUrls = keepDefaults
+    ? [...new Set([...base.ignoreUrls, ...fileIgnores])]
+    : fileIgnores.length
+      ? fileIgnores
+      : [...base.ignoreUrls];
 
   let timeoutMs = Number(raw.timeoutMs ?? raw.timeout_ms ?? raw.timeout ?? base.timeoutMs);
   if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) timeoutMs = base.timeoutMs;
@@ -42974,12 +42987,52 @@ async function run(deps = {}) {
   const licenseKey = getInput('polar-license-key') || '';
   const skipLicense = truthy(getInput('skip-license'), false);
   const configPath = getInput('config-path') || 'linkfail.yml';
-  const failOnBroken = truthy(getInput('fail-on-broken'), true);
-  const openIssue = truthy(getInput('open-issue'), false);
   const issueTitle =
     getInput('issue-title') || 'Linkfail: broken links detected';
   const token =
     getInput('github-token') || process.env.GITHUB_TOKEN || '';
+
+  // mode: auto | pr | schedule | report
+  // auto → fail on PR/push, open Issue on schedule/workflow_dispatch
+  const modeRaw = (getInput('mode') || 'auto').trim().toLowerCase();
+  const eventName =
+    deps.eventName ||
+    process.env.GITHUB_EVENT_NAME ||
+    (deps.context || github.context)?.eventName ||
+    '';
+  const isPrLike = eventName === 'pull_request' || eventName === 'pull_request_target';
+  const isDigestEvent =
+    eventName === 'schedule' || eventName === 'workflow_dispatch';
+
+  let failOnBroken;
+  let openIssue;
+  if (modeRaw === 'auto') {
+    const failIn = getInput('fail-on-broken');
+    const openIn = getInput('open-issue');
+    failOnBroken =
+      failIn === '' || failIn == null
+        ? isPrLike || eventName === 'push' || eventName === ''
+        : truthy(failIn, true);
+    openIssue =
+      openIn === '' || openIn == null
+        ? isDigestEvent
+        : truthy(openIn, false);
+    // If neither event hint: keep fail-on-broken true, open-issue false (local/Action default)
+    if (!eventName) {
+      failOnBroken = failIn === '' || failIn == null ? true : truthy(failIn, true);
+      openIssue = openIn === '' || openIn == null ? false : truthy(openIn, false);
+    }
+  } else if (modeRaw === 'pr') {
+    failOnBroken = truthy(getInput('fail-on-broken'), true);
+    openIssue = truthy(getInput('open-issue'), false);
+  } else if (modeRaw === 'schedule' || modeRaw === 'report') {
+    failOnBroken = truthy(getInput('fail-on-broken'), false);
+    openIssue = truthy(getInput('open-issue'), true);
+  } else {
+    failOnBroken = truthy(getInput('fail-on-broken'), true);
+    openIssue = truthy(getInput('open-issue'), false);
+  }
+  info(`Mode: ${modeRaw} (event=${eventName || 'none'}) fail=${failOnBroken} issue=${openIssue}`);
 
   const license = validateLicense({
     licenseKey,
@@ -43000,6 +43053,18 @@ async function run(deps = {}) {
 
   const scan = await scanRepo({ config, cwd, fetchImpl });
   info(formatConsoleSummary(scan));
+  const notice =
+    deps.notice ||
+    ((m) => {
+      try {
+        core.notice(m);
+      } catch {
+        info(m);
+      }
+    });
+  notice(
+    `Linkfail: ${scan.results.length} URLs · ${scan.okCount} ok · ${scan.broken.length} broken`,
+  );
 
   setOutput('broken-count', String(scan.broken.length));
   setOutput('ok-count', String(scan.okCount));
