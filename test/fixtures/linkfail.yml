@@ -1,0 +1,10 @@
+include:
+  - "**/*.md"
+exclude:
+  - "**/node_modules/**"
+ignoreUrls:
+  - "https://img.shields.io"
+  - "https://localhost"
+timeoutMs: 500
+concurrency: 4
+checkHtml: false

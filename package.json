@@ -1,0 +1,42 @@
+{
+  "name": "linkfail",
+  "version": "0.1.0",
+  "description": "GitHub Action that fails CI when docs links die — Made By Zer01",
+  "type": "module",
+  "main": "dist/index.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "ncc build src/index.js -o dist --license licenses.txt",
+    "test": "node --test test/*.test.js",
+    "local": "node scripts/local-run.js",
+    "prepare": "npm run build"
+  },
+  "keywords": [
+    "github-actions",
+    "broken-links",
+    "markdown",
+    "linkfail",
+    "zer01"
+  ],
+  "author": "Zer01",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@actions/core": "^1.11.1",
+    "@actions/github": "^6.0.0",
+    "fast-glob": "^3.3.3",
+    "js-yaml": "^4.1.0"
+  },
+  "devDependencies": {
+    "@vercel/ncc": "^0.38.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zer01dollars/linkfail.git"
+  },
+  "bugs": {
+    "url": "https://github.com/zer01dollars/linkfail/issues"
+  },
+  "homepage": "https://github.com/zer01dollars/linkfail#readme"
+}

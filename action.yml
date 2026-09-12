@@ -1,0 +1,49 @@
+name: 'Linkfail'
+description: 'Fail CI when Markdown/HTML docs links die. Made By Zer01.'
+author: 'Zer01'
+branding:
+  icon: 'link'
+  color: 'red'
+
+inputs:
+  github-token:
+    description: 'GitHub token for opening/updating issues'
+    required: false
+    default: ${{ github.token }}
+  polar-license-key:
+    description: 'Polar license key for Linkfail (stub: length >= 8 until products wired)'
+    required: false
+  skip-license:
+    description: 'Skip Polar license check (dev/CI only)'
+    required: false
+    default: 'false'
+  config-path:
+    description: 'Path to linkfail.yml config'
+    required: false
+    default: 'linkfail.yml'
+  fail-on-broken:
+    description: 'Fail the job when broken links are found (default true)'
+    required: false
+    default: 'true'
+  open-issue:
+    description: 'Open or update a GitHub Issue with the report (default false; use on schedule)'
+    required: false
+    default: 'false'
+  issue-title:
+    description: 'Title for the digest Issue'
+    required: false
+    default: 'Linkfail: broken links detected'
+
+outputs:
+  broken-count:
+    description: 'Number of broken/timeout/error URLs'
+  ok-count:
+    description: 'Number of healthy URLs'
+  url-count:
+    description: 'Unique URLs checked'
+  issue-url:
+    description: 'URL of opened/updated Issue when open-issue is true'
+
+runs:
+  using: 'node20'
+  main: 'dist/index.js'
