@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.1] — 2026-09-13
+
+- Hosted Website API live at https://linkfail-api.fly.dev
+- Dockerfile: `--ignore-scripts` so production image skips ncc prepare
+- Fly.io + Render deploy configs; GitHub Action deploy workflow
+
 ## [0.4.0] — 2026-09-12
 
 ### Added

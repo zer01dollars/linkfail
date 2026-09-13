@@ -122,12 +122,9 @@ npx linkfail site https://docs.example.com --max-pages 50 --max-depth 2
 npx linkfail site https://docs.example.com --json
 ```
 
-### HTTP API (`service/`)
+### Hosted API (live)
 
-```bash
-npm run serve          # or: npx linkfail serve --port 8787
-# Docker: docker build -f service/Dockerfile -t linkfail-website . && docker run -p 8787:8787 linkfail-website
-```
+**Base URL:** https://linkfail-api.fly.dev
 
 | Endpoint | Body / notes |
 |----------|----------------|
@@ -135,15 +132,23 @@ npm run serve          # or: npx linkfail serve --port 8787
 | `POST /v1/check` | `{ "url", "licenseKey", "maxPages?", "maxDepth?" }` → JSON report |
 | `GET /` | Tiny landing snippet |
 
-Env: `PORT` (default `8787`), `POLAR_ORGANIZATION_ID` (defaults to Zer01 org `b6303f05-be1c-4b45-b847-5979667a3d12`).
-
-Example:
+Buy a Polar key, then:
 
 ```bash
-curl -sS -X POST http://localhost:8787/v1/check \
+curl -sS -X POST https://linkfail-api.fly.dev/v1/check \
   -H 'content-type: application/json' \
   -d '{"url":"https://example.com","licenseKey":"'"$LINKFAIL_LICENSE_KEY"'","maxPages":20,"maxDepth":2}'
 ```
+
+Self-host / local:
+
+```bash
+npm run serve          # or: npx linkfail serve --port 8787
+# Docker: docker build -f service/Dockerfile -t linkfail-website . && docker run -p 8787:8787 linkfail-website
+# Fly: fly deploy -a linkfail-api
+```
+
+Env: `PORT` (default `8787`), `POLAR_ORGANIZATION_ID` (defaults to Zer01 org `b6303f05-be1c-4b45-b847-5979667a3d12`).
 
 ### Action (`mode: website`)
 

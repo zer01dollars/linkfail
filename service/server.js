@@ -12,7 +12,7 @@ import {
 import { crawlSite } from '../src/crawl.js';
 
 const PRODUCT = 'linkfail-website';
-const VERSION = '0.4.0';
+const VERSION = '0.4.1';;
 
 /**
  * Read request body as UTF-8 string (with size cap).

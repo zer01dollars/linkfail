@@ -1,0 +1,14 @@
+# Linkfail Website API — Made By Zer01 (Render fallback)
+services:
+  - type: web
+    name: linkfail-api
+    runtime: docker
+    dockerfilePath: ./service/Dockerfile
+    dockerContext: .
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: "8787"
+      - key: POLAR_ORGANIZATION_ID
+        value: b6303f05-be1c-4b45-b847-5979667a3d12

@@ -1,0 +1,23 @@
+# Linkfail Website API — Made By Zer01
+app = "linkfail-api"
+primary_region = "iad"
+
+[build]
+  dockerfile = "service/Dockerfile"
+
+[env]
+  PORT = "8787"
+  POLAR_ORGANIZATION_ID = "b6303f05-be1c-4b45-b847-5979667a3d12"
+
+[http_service]
+  internal_port = 8787
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ["app"]
+
+[[vm]]
+  memory = "512mb"
+  cpu_kind = "shared"
+  cpus = 1

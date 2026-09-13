@@ -2,7 +2,8 @@
 FROM node:20-alpine
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev
+# Service runs from src/ directly; skip prepare/ncc build
+RUN npm ci --omit=dev --ignore-scripts
 COPY src ./src
 COPY service ./service
 ENV PORT=8787

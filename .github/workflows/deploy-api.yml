@@ -1,0 +1,26 @@
+# Deploy Linkfail Website API to Fly.io — Made By Zer01
+name: Deploy API
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'service/**'
+      - 'src/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'fly.toml'
+      - 'Dockerfile'
+      - 'service/Dockerfile'
+      - '.github/workflows/deploy-api.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: Deploy
+        run: flyctl deploy --remote-only -a linkfail-api
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

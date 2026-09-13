@@ -1,6 +1,6 @@
 {
   "name": "linkfail",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Full-service docs link CI + website crawl API \u2014 fail PRs, reports, Issues, webhooks. Made By Zer01",
   "type": "module",
   "main": "dist/index.js",
