@@ -23,10 +23,12 @@ Artificially Intelligent, Digitally Enhanced.
 | **SARIF** | `linkfail-out/linkfail.sarif` for GitHub Code Scanning UI |
 | **Weekly Issue** | Open or update a digest Issue on schedule / `workflow_dispatch` |
 | **Webhook** | Slack-compatible POST when you set `webhook-url` |
+| **Website crawl** | BFS same-origin HTML pages from a start URL, then check every link |
+| **Website API** | Hosted `service/` — Polar-licensed `POST /v1/check` |
 
 Under the hood: HTTP `HEAD` (falls back to `GET`), timeouts, parallel checks.
 
-**Not included:** full-site crawling, JS-rendered SPA spidering, Cursor rules.
+**Not included:** JS-rendered SPA spidering, Cursor rules.
 
 ---
 
@@ -99,12 +101,63 @@ npm install
 npx linkfail init /path/to/your-repo
 npx linkfail check          # SKIP_LICENSE by default; writes linkfail-out/
 npx linkfail check --license "$LINKFAIL_LICENSE_KEY"
+npx linkfail site https://example.com --max-pages 20 --max-depth 2
+npx linkfail site https://example.com --json
+npx linkfail serve --port 8787
 ```
 
 `./scripts/install.sh [dir]` wraps `linkfail init`.
 
 ---
 
+
+## Website as a Service
+
+Crawl a live site (same-origin HTML BFS), extract links, and check them with the same engine as Markdown CI.
+
+### CLI
+
+```bash
+npx linkfail site https://docs.example.com --max-pages 50 --max-depth 2
+npx linkfail site https://docs.example.com --json
+```
+
+### HTTP API (`service/`)
+
+```bash
+npm run serve          # or: npx linkfail serve --port 8787
+# Docker: docker build -f service/Dockerfile -t linkfail-website . && docker run -p 8787:8787 linkfail-website
+```
+
+| Endpoint | Body / notes |
+|----------|----------------|
+| `GET /health` | `{ ok: true, product: "linkfail-website" }` |
+| `POST /v1/check` | `{ "url", "licenseKey", "maxPages?", "maxDepth?" }` → JSON report |
+| `GET /` | Tiny landing snippet |
+
+Env: `PORT` (default `8787`), `POLAR_ORGANIZATION_ID` (defaults to Zer01 org `b6303f05-be1c-4b45-b847-5979667a3d12`).
+
+Example:
+
+```bash
+curl -sS -X POST http://localhost:8787/v1/check \
+  -H 'content-type: application/json' \
+  -d '{"url":"https://example.com","licenseKey":"'"$LINKFAIL_LICENSE_KEY"'","maxPages":20,"maxDepth":2}'
+```
+
+### Action (`mode: website`)
+
+```yaml
+- uses: zer01dollars/linkfail@v1
+  with:
+    mode: website
+    start-url: https://docs.example.com
+    max-pages: '50'
+    max-depth: '2'
+    polar-license-key: ${{ secrets.LINKFAIL_LICENSE_KEY }}
+```
+
+---
 ## Optional config
 
 Create `linkfail.yml` at the repo root (see [`templates/linkfail.example.yml`](templates/linkfail.example.yml)):
@@ -129,7 +182,9 @@ checkHtml: false
 |-------|---------|---------|
 | `polar-license-key` | — | Your Polar key |
 | `polar-organization-id` | Zer01 org | Override Polar org id |
-| `mode` | `auto` | fail on PR/push, Issue on schedule |
+| `mode` | `auto` | fail on PR/push, Issue on schedule; or `website` |
+| `start-url` | — | Required when `mode=website` |
+| `max-pages` / `max-depth` | `50` / `2` | Website crawl limits |
 | `fail-on-broken` / `open-issue` | *(auto)* | Overrides for `mode` |
 | `comment-on-pr` | `true` on `pull_request` | Upsert PR report comment |
 | `write-sarif` | `true` | Write `linkfail-out/linkfail.sarif` |

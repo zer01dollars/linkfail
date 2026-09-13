@@ -42520,6 +42520,9 @@ const {
  *   concurrency: number,
  *   checkHtml: boolean,
  *   userAgent: string,
+ *   maxPages: number,
+ *   maxDepth: number,
+ *   sameOriginOnly: boolean,
  * }} LinkfailConfig */
 
 /** @returns {LinkfailConfig} */
@@ -42542,7 +42545,10 @@ function defaultConfig() {
     timeoutMs: 10000,
     concurrency: 8,
     checkHtml: false,
-    userAgent: 'Linkfail/0.3 (+https://github.com/zer01dollars/linkfail)',
+    userAgent: 'Linkfail/0.4 (+https://github.com/zer01dollars/linkfail)',
+    maxPages: 50,
+    maxDepth: 2,
+    sameOriginOnly: true,
   };
 }
 
@@ -42602,6 +42608,17 @@ function loadConfig(configPath = 'linkfail.yml', cwd = process.cwd()) {
     mergedInclude.push('**/*.{html,htm}');
   }
 
+  let maxPages = Number(raw.maxPages ?? raw.max_pages ?? base.maxPages);
+  if (!Number.isFinite(maxPages) || maxPages < 1) maxPages = base.maxPages;
+
+  let maxDepth = Number(raw.maxDepth ?? raw.max_depth ?? base.maxDepth);
+  if (!Number.isFinite(maxDepth) || maxDepth < 0) maxDepth = base.maxDepth;
+
+  const sameOriginOnly =
+    raw.sameOriginOnly ?? raw.same_origin_only ?? base.sameOriginOnly;
+  const sameOrigin =
+    sameOriginOnly === false || sameOriginOnly === 'false' ? false : true;
+
   return {
     include: mergedInclude,
     exclude,
@@ -42610,6 +42627,9 @@ function loadConfig(configPath = 'linkfail.yml', cwd = process.cwd()) {
     concurrency: Math.floor(concurrency),
     checkHtml,
     userAgent: userAgent || base.userAgent,
+    maxPages: Math.floor(maxPages),
+    maxDepth: Math.floor(maxDepth),
+    sameOriginOnly: sameOrigin,
   };
 }
 
@@ -42954,6 +42974,387 @@ async function scanRepo({
     broken,
     okCount,
     ignoredCount,
+  };
+}
+
+;// CONCATENATED MODULE: ./src/html-extract.js
+/**
+ * Extract absolute http(s) URLs from HTML resource attributes.
+ * Resolves relative URLs against a page base URL.
+ */
+
+/**
+ * @param {string} html
+ * @param {string} [baseUrl]
+ * @returns {string[]} unique absolute http(s) URLs in document order
+ */
+function extractHtmlLinks(html, baseUrl = '') {
+  const found = [];
+  const seen = new Set();
+  let base;
+  try {
+    base = baseUrl ? new URL(baseUrl) : null;
+  } catch {
+    base = null;
+  }
+
+  const push = (raw) => {
+    if (!raw) return;
+    let candidate = String(raw).trim();
+    if (
+      !candidate ||
+      candidate.startsWith('#') ||
+      candidate.toLowerCase().startsWith('javascript:') ||
+      candidate.toLowerCase().startsWith('mailto:') ||
+      candidate.toLowerCase().startsWith('tel:') ||
+      candidate.toLowerCase().startsWith('data:')
+    ) {
+      return;
+    }
+    let url;
+    try {
+      url = base ? new URL(candidate, base) : new URL(candidate);
+    } catch {
+      return;
+    }
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return;
+    const href = url.href;
+    if (seen.has(href)) return;
+    seen.add(href);
+    found.push(href);
+  };
+
+  // a href, link href, img/script/iframe src (quoted)
+  const attrRe =
+    /<(?:a|link)\b[^>]*?\bhref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))|<(?:img|script|iframe)\b[^>]*?\bsrc\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/gi;
+
+  let m;
+  while ((m = attrRe.exec(html)) !== null) {
+    const raw = m[1] ?? m[2] ?? m[3] ?? m[4] ?? m[5] ?? m[6];
+    push(raw);
+  }
+
+  return found;
+}
+
+/**
+ * Links that are candidates for HTML page BFS (typically <a href>).
+ * @param {string} html
+ * @param {string} [baseUrl]
+ * @returns {string[]}
+ */
+function extractHtmlPageLinks(html, baseUrl = '') {
+  const found = [];
+  const seen = new Set();
+  let base;
+  try {
+    base = baseUrl ? new URL(baseUrl) : null;
+  } catch {
+    base = null;
+  }
+
+  const push = (raw) => {
+    if (!raw) return;
+    let candidate = String(raw).trim();
+    if (
+      !candidate ||
+      candidate.startsWith('#') ||
+      candidate.toLowerCase().startsWith('javascript:') ||
+      candidate.toLowerCase().startsWith('mailto:') ||
+      candidate.toLowerCase().startsWith('tel:') ||
+      candidate.toLowerCase().startsWith('data:')
+    ) {
+      return;
+    }
+    let url;
+    try {
+      url = base ? new URL(candidate, base) : new URL(candidate);
+    } catch {
+      return;
+    }
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return;
+    const href = url.href;
+    if (seen.has(href)) return;
+    seen.add(href);
+    found.push(href);
+  };
+
+  const aRe = /<a\b[^>]*?\bhref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/gi;
+  let m;
+  while ((m = aRe.exec(html)) !== null) {
+    push(m[1] ?? m[2] ?? m[3]);
+  }
+  return found;
+}
+
+/**
+ * Rough heuristic: path looks like a crawlable HTML page (not a static asset).
+ * @param {string} url
+ * @returns {boolean}
+ */
+function looksLikeHtmlPage(url) {
+  let u;
+  try {
+    u = new URL(url);
+  } catch {
+    return false;
+  }
+  const path = u.pathname.toLowerCase();
+  if (path.endsWith('/')) return true;
+  const last = path.split('/').pop() || '';
+  if (!last.includes('.')) return true;
+  return /\.(html?|php|asp|aspx|jsp|cfm|xhtml)$/i.test(last);
+}
+
+;// CONCATENATED MODULE: ./src/crawl.js
+/**
+ * BFS same-origin HTML crawl → collect links → check with check.js.
+ */
+
+
+
+
+
+/**
+ * @typedef {{ url: string, depth: number, status?: number, contentType?: string }} CrawledPage
+ */
+
+/**
+ * Fetch a page body for crawling (GET).
+ * @param {string} url
+ * @param {object} options
+ * @returns {Promise<{ ok: boolean, status: number, contentType: string, body: string, finalUrl: string }>}
+ */
+async function fetchPage(
+  url,
+  {
+    timeoutMs = 10000,
+    userAgent = 'Linkfail/0.4 (+https://github.com/zer01dollars/linkfail)',
+    fetchImpl = globalThis.fetch,
+  } = {},
+) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetchImpl(url, {
+      method: 'GET',
+      redirect: 'follow',
+      signal: controller.signal,
+      headers: {
+        'user-agent': userAgent,
+        accept: 'text/html,application/xhtml+xml,*/*;q=0.8',
+      },
+    });
+    const contentType = String(
+      res.headers?.get?.('content-type') ||
+        res.headers?.['content-type'] ||
+        '',
+    ).toLowerCase();
+    let body = '';
+    if (typeof res.text === 'function') {
+      body = await res.text();
+    } else if (typeof res.body === 'string') {
+      body = res.body;
+    }
+    const finalUrl =
+      (typeof res.url === 'string' && res.url) || url;
+    return {
+      ok: res.ok || (res.status >= 200 && res.status < 400),
+      status: res.status,
+      contentType,
+      body,
+      finalUrl,
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function sameOrigin(a, b) {
+  try {
+    const ua = new URL(a);
+    const ub = new URL(b);
+    return ua.origin === ub.origin;
+  } catch {
+    return false;
+  }
+}
+
+function isHtmlContentType(contentType) {
+  if (!contentType) return true; // unknown — allow for fixtures
+  return (
+    contentType.includes('text/html') ||
+    contentType.includes('application/xhtml')
+  );
+}
+
+/**
+ * Crawl a website starting at startUrl.
+ *
+ * @param {object} options
+ * @param {string} options.startUrl
+ * @param {number} [options.maxPages=50]
+ * @param {number} [options.maxDepth=2]
+ * @param {boolean} [options.sameOriginOnly=true]
+ * @param {number} [options.concurrency]
+ * @param {number} [options.timeoutMs]
+ * @param {string} [options.userAgent]
+ * @param {string[]} [options.ignoreUrls]
+ * @param {typeof fetch} [options.fetchImpl]
+ * @returns {Promise<{
+ *   startUrl: string,
+ *   pages: CrawledPage[],
+ *   links: { url: string, pages: string[] }[],
+ *   results: import('./check.js').CheckResult[],
+ *   broken: import('./check.js').CheckResult[],
+ *   okCount: number,
+ *   ignoredCount: number,
+ * }>}
+ */
+async function crawlSite({
+  startUrl,
+  maxPages = 50,
+  maxDepth = 2,
+  sameOriginOnly = true,
+  concurrency = 8,
+  timeoutMs = 10000,
+  userAgent = 'Linkfail/0.4 (+https://github.com/zer01dollars/linkfail)',
+  ignoreUrls = [],
+  fetchImpl = globalThis.fetch,
+} = {}) {
+  if (!startUrl || !String(startUrl).trim()) {
+    throw new Error('startUrl is required');
+  }
+
+  let originUrl;
+  try {
+    originUrl = new URL(String(startUrl).trim()).href;
+  } catch {
+    throw new Error(`Invalid startUrl: ${startUrl}`);
+  }
+
+  const maxP = Math.max(1, Number(maxPages) || 50);
+  const maxD = Math.max(0, Number(maxDepth) || 0);
+
+  /** @type {CrawledPage[]} */
+  const pages = [];
+  /** @type {Map<string, Set<string>>} */
+  const urlToPages = new Map();
+  let ignoredCount = 0;
+
+  const visited = new Set();
+  /** @type {{ url: string, depth: number }[]} */
+  const queue = [{ url: originUrl, depth: 0 }];
+
+  const fetchOpts = { timeoutMs, userAgent, fetchImpl };
+
+  while (queue.length && pages.length < maxP) {
+    const { url, depth } = queue.shift();
+    if (visited.has(url)) continue;
+    visited.add(url);
+
+    let page;
+    try {
+      page = await fetchPage(url, fetchOpts);
+    } catch (err) {
+      if (err?.name === 'AbortError') {
+        pages.push({
+          url,
+          depth,
+          status: 0,
+          contentType: '',
+          error: 'timeout',
+        });
+      } else {
+        pages.push({
+          url,
+          depth,
+          status: 0,
+          contentType: '',
+          error: String(err?.message || err),
+        });
+      }
+      continue;
+    }
+
+    pages.push({
+      url: page.finalUrl || url,
+      depth,
+      status: page.status,
+      contentType: page.contentType,
+    });
+
+    if (!page.ok || !isHtmlContentType(page.contentType)) {
+      continue;
+    }
+
+    const pageUrl = page.finalUrl || url;
+    const allLinks = extractHtmlLinks(page.body, pageUrl);
+    const pageLinks = extractHtmlPageLinks(page.body, pageUrl);
+
+    for (const link of allLinks) {
+      if (shouldIgnoreUrl(link, ignoreUrls)) {
+        ignoredCount++;
+        continue;
+      }
+      if (!urlToPages.has(link)) urlToPages.set(link, new Set());
+      urlToPages.get(link).add(pageUrl);
+    }
+
+    if (depth >= maxD) continue;
+
+    for (const link of pageLinks) {
+      if (sameOriginOnly && !sameOrigin(originUrl, link)) continue;
+      if (!looksLikeHtmlPage(link)) continue;
+      if (visited.has(link)) continue;
+      if (queue.some((q) => q.url === link)) continue;
+      if (pages.length + queue.length >= maxP) break;
+      queue.push({ url: link, depth: depth + 1 });
+    }
+  }
+
+  const uniqueUrls = [...urlToPages.keys()];
+  const results = await checkUrls(uniqueUrls, {
+    timeoutMs,
+    concurrency,
+    userAgent,
+    fetchImpl,
+  });
+
+  const broken = results.filter(isFailure);
+  const okCount = results.filter((r) => r.status === 'ok').length;
+
+  const links = uniqueUrls.map((url) => ({
+    url,
+    pages: [...(urlToPages.get(url) || [])].sort(),
+  }));
+
+  return {
+    startUrl: originUrl,
+    pages,
+    links,
+    results,
+    broken,
+    okCount,
+    ignoredCount,
+  };
+}
+
+/**
+ * Adapt crawl result to the shape scanRepo returns (for reports).
+ * @param {Awaited<ReturnType<typeof crawlSite>>} crawl
+ */
+function crawlToScanShape(crawl) {
+  return {
+    files: crawl.pages.map((p) => p.url),
+    links: crawl.links.map((l) => ({
+      url: l.url,
+      files: l.pages,
+    })),
+    results: crawl.results,
+    broken: crawl.broken,
+    okCount: crawl.okCount,
+    ignoredCount: crawl.ignoredCount,
   };
 }
 
@@ -43482,6 +43883,7 @@ async function notifyWebhook({
 
 
 
+
 function truthy(v, defaultValue = false) {
   if (v === undefined || v === null || v === '') return defaultValue;
   const s = String(v).trim().toLowerCase();
@@ -43613,11 +44015,50 @@ async function run(deps = {}) {
   );
 
   const config = loadConfig(configPath, cwd);
-  info(
-    `Config: include=${config.include.join(',')} timeout=${config.timeoutMs}ms`,
-  );
+  const startUrl =
+    getInput('start-url') ||
+    getInput('startUrl') ||
+    process.env.LINKFAIL_START_URL ||
+    '';
+  const isWebsite = modeRaw === 'website' || modeRaw === 'site';
 
-  const scan = await scanRepo({ config, cwd, fetchImpl });
+  let scan;
+  if (isWebsite) {
+    if (!startUrl.trim()) {
+      setFailed('mode=website requires start-url input');
+      return { ok: false, reason: 'missing_start_url' };
+    }
+    const maxPages = Number(
+      getInput('max-pages') || config.maxPages || 50,
+    );
+    const maxDepth = Number(
+      getInput('max-depth') || config.maxDepth || 2,
+    );
+    info(
+      `Website crawl: ${startUrl.trim()} maxPages=${maxPages} maxDepth=${maxDepth}`,
+    );
+    const crawl = await crawlSite({
+      startUrl: startUrl.trim(),
+      maxPages,
+      maxDepth,
+      sameOriginOnly: config.sameOriginOnly,
+      concurrency: config.concurrency,
+      timeoutMs: config.timeoutMs,
+      userAgent: config.userAgent,
+      ignoreUrls: config.ignoreUrls,
+      fetchImpl,
+    });
+    scan = crawlToScanShape(crawl);
+    info(
+      `Crawled ${crawl.pages.length} page(s); checking ${scan.results.length} URL(s)`,
+    );
+  } else {
+    info(
+      `Config: include=${config.include.join(',')} timeout=${config.timeoutMs}ms`,
+    );
+    scan = await scanRepo({ config, cwd, fetchImpl });
+  }
+
   info(formatConsoleSummary(scan));
   notice(
     `Linkfail: ${scan.results.length} URLs · ${scan.okCount} ok · ${scan.broken.length} broken`,
@@ -43644,7 +44085,7 @@ async function run(deps = {}) {
   const meta = {
     repo: repoLabel,
     generatedAt: new Date().toISOString(),
-    version: '0.3.0',
+    version: '0.4.0',
   };
 
   let reportPaths;

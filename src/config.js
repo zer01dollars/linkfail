@@ -14,6 +14,9 @@ import yaml from 'js-yaml';
  *   concurrency: number,
  *   checkHtml: boolean,
  *   userAgent: string,
+ *   maxPages: number,
+ *   maxDepth: number,
+ *   sameOriginOnly: boolean,
  * }} LinkfailConfig */
 
 /** @returns {LinkfailConfig} */
@@ -36,7 +39,10 @@ export function defaultConfig() {
     timeoutMs: 10000,
     concurrency: 8,
     checkHtml: false,
-    userAgent: 'Linkfail/0.3 (+https://github.com/zer01dollars/linkfail)',
+    userAgent: 'Linkfail/0.4 (+https://github.com/zer01dollars/linkfail)',
+    maxPages: 50,
+    maxDepth: 2,
+    sameOriginOnly: true,
   };
 }
 
@@ -96,6 +102,17 @@ export function loadConfig(configPath = 'linkfail.yml', cwd = process.cwd()) {
     mergedInclude.push('**/*.{html,htm}');
   }
 
+  let maxPages = Number(raw.maxPages ?? raw.max_pages ?? base.maxPages);
+  if (!Number.isFinite(maxPages) || maxPages < 1) maxPages = base.maxPages;
+
+  let maxDepth = Number(raw.maxDepth ?? raw.max_depth ?? base.maxDepth);
+  if (!Number.isFinite(maxDepth) || maxDepth < 0) maxDepth = base.maxDepth;
+
+  const sameOriginOnly =
+    raw.sameOriginOnly ?? raw.same_origin_only ?? base.sameOriginOnly;
+  const sameOrigin =
+    sameOriginOnly === false || sameOriginOnly === 'false' ? false : true;
+
   return {
     include: mergedInclude,
     exclude,
@@ -104,6 +121,9 @@ export function loadConfig(configPath = 'linkfail.yml', cwd = process.cwd()) {
     concurrency: Math.floor(concurrency),
     checkHtml,
     userAgent: userAgent || base.userAgent,
+    maxPages: Math.floor(maxPages),
+    maxDepth: Math.floor(maxDepth),
+    sameOriginOnly: sameOrigin,
   };
 }
 

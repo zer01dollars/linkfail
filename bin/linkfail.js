@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Linkfail CLI — init workflow + local check.
+ * Linkfail CLI — init, check, site crawl, serve API.
  * Made By Zer01
  */
 
@@ -15,15 +15,18 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadConfig } from '../src/config.js';
 import { scanRepo } from '../src/scan.js';
+import { crawlSite, crawlToScanShape } from '../src/crawl.js';
 import {
   formatConsoleSummary,
   formatIssueBody,
   writeReports,
 } from '../src/report.js';
 import { validateLicense } from '../src/license.js';
+import { listen } from '../service/server.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
+const VERSION = '0.4.0';
 
 const BUY = {
   single:
@@ -35,17 +38,29 @@ const BUY = {
 };
 
 function usage() {
-  console.log(`Linkfail CLI — Made By Zer01
+  console.log(`Linkfail CLI v${VERSION} — Made By Zer01
 
 Usage:
-  linkfail init [dir]     Copy examples/linkfail.yml → .github/workflows/linkfail.yml
-  linkfail check [opts]   Scan the current repo locally; write linkfail-out/
+  linkfail init [dir]              Copy examples/linkfail.yml → .github/workflows/
+  linkfail check [opts]            Scan Markdown/HTML in the current repo
+  linkfail site <url> [opts]       BFS crawl a website and check links
+  linkfail serve [--port N]        Run the Website-as-a-Service HTTP API
 
 Options for check:
   --license <key>         Validate a Polar key (otherwise SKIP_LICENSE)
   --config <path>         Config file (default: linkfail.yml)
   --no-sarif              Skip SARIF output
   --cwd <dir>             Working directory (default: .)
+
+Options for site:
+  --max-pages <n>         Max HTML pages to crawl (default: 50)
+  --max-depth <n>         Max depth from start URL (default: 2)
+  --json                  Print JSON report to stdout
+  --license <key>         Validate a Polar key (otherwise SKIP_LICENSE)
+
+Options for serve:
+  --port <n>              Listen port (default: PORT env or 8787)
+
   -h, --help              Show help
 `);
 }
@@ -89,6 +104,10 @@ function parseArgs(argv) {
     else if (a === '--config') args.config = argv[++i];
     else if (a === '--cwd') args.cwd = argv[++i];
     else if (a === '--no-sarif') args.noSarif = true;
+    else if (a === '--max-pages') args.maxPages = argv[++i];
+    else if (a === '--max-depth') args.maxDepth = argv[++i];
+    else if (a === '--json') args.json = true;
+    else if (a === '--port') args.port = argv[++i];
     else if (a === '-h' || a === '--help') args.help = true;
     else if (a.startsWith('-')) {
       console.error(`Unknown option: ${a}`);
@@ -138,7 +157,7 @@ export async function checkLocal({
     meta: {
       repo: '',
       generatedAt: new Date().toISOString(),
-      version: '0.3.0',
+      version: VERSION,
     },
   });
   console.log(`Wrote ${paths.md}`);
@@ -153,6 +172,84 @@ export async function checkLocal({
   }
   console.log('All links healthy.');
   return { ok: true, scan, paths };
+}
+
+/**
+ * Website crawl from CLI.
+ * @param {object} options
+ */
+export async function siteCheck({
+  startUrl,
+  maxPages = 50,
+  maxDepth = 2,
+  licenseKey = '',
+  json = false,
+  fetchImpl = globalThis.fetch,
+  ignoreUrls,
+  concurrency,
+  timeoutMs,
+  userAgent,
+} = {}) {
+  const useLicense = Boolean(licenseKey);
+  if (!useLicense) {
+    process.env.SKIP_LICENSE = process.env.SKIP_LICENSE || '1';
+  }
+
+  const license = await validateLicense({
+    licenseKey,
+    skip: !useLicense,
+    fetchImpl,
+  });
+  if (!license.ok) {
+    console.error(`License check failed: ${license.reason}`);
+    process.exitCode = 1;
+    return { ok: false, reason: license.reason };
+  }
+
+  const crawl = await crawlSite({
+    startUrl,
+    maxPages,
+    maxDepth,
+    concurrency,
+    timeoutMs,
+    userAgent,
+    ignoreUrls,
+    fetchImpl,
+  });
+
+  if (json) {
+    console.log(
+      JSON.stringify(
+        {
+          ok: crawl.broken.length === 0,
+          startUrl: crawl.startUrl,
+          pageCount: crawl.pages.length,
+          urlCount: crawl.results.length,
+          okCount: crawl.okCount,
+          brokenCount: crawl.broken.length,
+          pages: crawl.pages,
+          broken: crawl.broken,
+          links: crawl.links,
+          results: crawl.results,
+        },
+        null,
+        2,
+      ),
+    );
+  } else {
+    const scan = crawlToScanShape(crawl);
+    console.log(
+      `Crawled ${crawl.pages.length} page(s) from ${crawl.startUrl}`,
+    );
+    console.log(formatConsoleSummary(scan));
+  }
+
+  if (crawl.broken.length) {
+    process.exitCode = 1;
+    return { ok: false, crawl };
+  }
+  if (!json) console.log('All links healthy.');
+  return { ok: true, crawl };
 }
 
 async function main(argv = process.argv.slice(2)) {
@@ -177,6 +274,29 @@ async function main(argv = process.argv.slice(2)) {
       licenseKey: args.license || '',
       writeSarif: !args.noSarif,
     });
+    return;
+  }
+
+  if (cmd === 'site') {
+    const url = args._[1];
+    if (!url) {
+      console.error('Usage: linkfail site <url> [--max-pages N] [--max-depth N] [--json]');
+      process.exitCode = 1;
+      return;
+    }
+    await siteCheck({
+      startUrl: url,
+      maxPages: args.maxPages != null ? Number(args.maxPages) : 50,
+      maxDepth: args.maxDepth != null ? Number(args.maxDepth) : 2,
+      licenseKey: args.license || '',
+      json: Boolean(args.json),
+    });
+    return;
+  }
+
+  if (cmd === 'serve') {
+    const port = args.port != null ? Number(args.port) : undefined;
+    listen({ port });
     return;
   }
 

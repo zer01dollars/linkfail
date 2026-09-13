@@ -8,6 +8,7 @@ import * as github from '@actions/github';
 import { validateLicense } from './license.js';
 import { loadConfig } from './config.js';
 import { scanRepo } from './scan.js';
+import { crawlSite, crawlToScanShape } from './crawl.js';
 import {
   formatConsoleSummary,
   formatIssueBody,
@@ -148,11 +149,50 @@ export async function run(deps = {}) {
   );
 
   const config = loadConfig(configPath, cwd);
-  info(
-    `Config: include=${config.include.join(',')} timeout=${config.timeoutMs}ms`,
-  );
+  const startUrl =
+    getInput('start-url') ||
+    getInput('startUrl') ||
+    process.env.LINKFAIL_START_URL ||
+    '';
+  const isWebsite = modeRaw === 'website' || modeRaw === 'site';
 
-  const scan = await scanRepo({ config, cwd, fetchImpl });
+  let scan;
+  if (isWebsite) {
+    if (!startUrl.trim()) {
+      setFailed('mode=website requires start-url input');
+      return { ok: false, reason: 'missing_start_url' };
+    }
+    const maxPages = Number(
+      getInput('max-pages') || config.maxPages || 50,
+    );
+    const maxDepth = Number(
+      getInput('max-depth') || config.maxDepth || 2,
+    );
+    info(
+      `Website crawl: ${startUrl.trim()} maxPages=${maxPages} maxDepth=${maxDepth}`,
+    );
+    const crawl = await crawlSite({
+      startUrl: startUrl.trim(),
+      maxPages,
+      maxDepth,
+      sameOriginOnly: config.sameOriginOnly,
+      concurrency: config.concurrency,
+      timeoutMs: config.timeoutMs,
+      userAgent: config.userAgent,
+      ignoreUrls: config.ignoreUrls,
+      fetchImpl,
+    });
+    scan = crawlToScanShape(crawl);
+    info(
+      `Crawled ${crawl.pages.length} page(s); checking ${scan.results.length} URL(s)`,
+    );
+  } else {
+    info(
+      `Config: include=${config.include.join(',')} timeout=${config.timeoutMs}ms`,
+    );
+    scan = await scanRepo({ config, cwd, fetchImpl });
+  }
+
   info(formatConsoleSummary(scan));
   notice(
     `Linkfail: ${scan.results.length} URLs · ${scan.okCount} ok · ${scan.broken.length} broken`,
@@ -179,7 +219,7 @@ export async function run(deps = {}) {
   const meta = {
     repo: repoLabel,
     generatedAt: new Date().toISOString(),
-    version: '0.3.0',
+    version: '0.4.0',
   };
 
   let reportPaths;

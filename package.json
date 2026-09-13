@@ -1,7 +1,7 @@
 {
   "name": "linkfail",
-  "version": "0.3.0",
-  "description": "Full-service docs link CI — fail PRs, reports, Issues, webhooks. Made By Zer01",
+  "version": "0.4.0",
+  "description": "Full-service docs link CI + website crawl API \u2014 fail PRs, reports, Issues, webhooks. Made By Zer01",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
@@ -14,7 +14,8 @@
     "build": "ncc build src/index.js -o dist --license licenses.txt",
     "test": "node --test test/*.test.js",
     "local": "node scripts/local-run.js",
-    "prepare": "npm run build"
+    "prepare": "npm run build",
+    "serve": "node service/server.js"
   },
   "keywords": [
     "github-actions",
@@ -22,7 +23,10 @@
     "markdown",
     "linkfail",
     "zer01",
-    "cli"
+    "cli",
+    "website",
+    "crawl",
+    "saas"
   ],
   "author": "Zer01",
   "license": "Apache-2.0",
@@ -54,6 +58,7 @@
     "docs/site/",
     "README.md",
     "LICENSE",
-    "CHANGELOG.md"
+    "CHANGELOG.md",
+    "service/"
   ]
 }

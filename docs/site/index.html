@@ -4,7 +4,7 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>Linkfail — Broken docs links fail CI | Made By Zer01</title>
-  <meta name="description" content="Linkfail checks Markdown links in CI, fails PRs, posts comments, writes HTML/SARIF reports, and opens weekly Issues. Made By Zer01."/>
+  <meta name="description" content="Linkfail checks Markdown links in CI and crawls websites: fail PRs, reports, Issues, webhooks, and a Polar-licensed Website API. Made By Zer01."/>
   <meta property="og:title" content="Linkfail — Dead links fail CI"/>
   <meta property="og:description" content="Polar-licensed GitHub Action + CLI. Made By Zer01."/>
   <meta property="og:image" content="https://zer01dollars.github.io/linkfail/assets/og.png"/>
@@ -112,6 +112,7 @@
       <p>
         Linkfail checks Markdown http(s) links in GitHub Actions: fail the PR, leave a comment,
         ship an HTML + SARIF report, open a weekly Issue, and ping Slack.
+        Also crawl websites (CLI / <code>mode: website</code>) or call the Polar-licensed Website API.
       </p>
       <div class="cta">
         <a class="btn btn-primary" href="https://github.com/zer01dollars/linkfail#60-second-setup">Get started in 60s</a>
@@ -171,6 +172,7 @@
         <div class="card"><div class="icon">📊</div><h3>HTML report</h3><p>Self-contained dashboard in <code>linkfail-out/report.html</code> — upload as an artifact.</p></div>
         <div class="card"><div class="icon">🔎</div><h3>SARIF</h3><p>Optional Code Scanning SARIF so broken links show in the GitHub UI.</p></div>
         <div class="card"><div class="icon">🔔</div><h3>Webhook</h3><p>Slack-compatible incoming webhook — soft-fail if the hook is down.</p></div>
+        <div class="card"><div class="icon">🌐</div><h3>Website crawl</h3><p>BFS same-origin HTML pages from a start URL, then check every link — CLI, Action, or <code>POST /v1/check</code>.</p></div>
       </div>
     </section>
 

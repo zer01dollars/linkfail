@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.0] — 2026-09-12
+
+### Added
+
+- Website crawl mode: BFS same-origin HTML pages → extract links → check with existing checker
+- `src/html-extract.js` — absolute http(s) URLs from `a`/`link` href and `img`/`script`/`iframe` src
+- `src/crawl.js` — configurable `maxPages` (50), `maxDepth` (2), concurrency, timeout
+- Action inputs: `mode: website`, `start-url`, `max-pages`, `max-depth`
+- CLI: `linkfail site <url> [--max-pages] [--max-depth] [--json]` and `linkfail serve [--port]`
+- Hosted SaaS under `service/`: `GET /health`, `POST /v1/check` with Polar license validation
+- Optional `service/Dockerfile`; env `PORT`, `POLAR_ORGANIZATION_ID`
+- Unit tests for HTML extract, crawl (fixture site), and service handler (no long-lived server)
+
+### Changed
+
+- Package version 0.4.0
+- README: Website as a Service section
+- Docs landing pages mention website crawl / API
+
+Made By Zer01 — Artificially Intelligent, Digitally Enhanced.
+
 ## [0.3.0] — 2026-09-12
 
 ### Added

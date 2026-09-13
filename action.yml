@@ -21,9 +21,20 @@ inputs:
     required: false
     default: 'false'
   mode:
-    description: 'auto (recommended) | pr | schedule. auto fails on PR/push and opens an Issue on schedule.'
+    description: 'auto (recommended) | pr | schedule | website. auto fails on PR/push and opens an Issue on schedule; website crawls start-url.'
     required: false
     default: 'auto'
+  start-url:
+    description: 'Start URL for mode=website (BFS same-origin crawl)'
+    required: false
+  max-pages:
+    description: 'Max HTML pages to crawl in website mode (default 50)'
+    required: false
+    default: '50'
+  max-depth:
+    description: 'Max crawl depth from start-url in website mode (default 2)'
+    required: false
+    default: '2'
   config-path:
     description: 'Optional linkfail.yml path. Omit the file to use built-in defaults.'
     required: false
